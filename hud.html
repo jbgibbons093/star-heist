@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Star Heist HUD</title>
+<script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: transparent; overflow: hidden; font-family: 'Courier New', monospace; }
+
+  .hud {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 16px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 1px solid rgba(0, 200, 255, 0.3);
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-size: 14px;
+    width: fit-content;
+    margin: 0 auto;
+  }
+
+  .hud-section {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .divider {
+    width: 1px;
+    height: 24px;
+    background: rgba(0, 200, 255, 0.3);
+  }
+
+  .timer {
+    font-size: 18px;
+    font-weight: bold;
+    color: #00CCFF;
+    min-width: 48px;
+    text-align: center;
+  }
+  .timer.warning { color: #FFAA00; }
+  .timer.danger { color: #FF4444; animation: pulse 1s infinite; }
+
+  .role-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .role-crew { background: #0066AA; color: #fff; }
+  .role-saboteur { background: #AA0000; color: #fff; }
+  .role-unknown { background: #444; color: #aaa; }
+
+  .alive-count { color: #00FF88; font-weight: bold; }
+  .task-progress { color: #FFD700; }
+
+  .label { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+
+  .notification {
+    position: fixed;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    border: 1px solid #FFAA00;
+    border-radius: 6px;
+    padding: 8px 20px;
+    color: #FFAA00;
+    font-size: 14px;
+    font-weight: bold;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    z-index: 100;
+  }
+  .notification.visible { opacity: 1; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .phase-lobby .timer { display: none; }
+  .phase-lobby .task-section { display: none; }
+</style>
+</head>
+<body>
+<div id="hud" class="hud phase-lobby">
+  <div class="hud-section">
+    <span class="label">Role</span>
+    <span id="role-badge" class="role-badge role-unknown">LOBBY</span>
+  </div>
+  <div class="divider"></div>
+  <div class="hud-section">
+    <span id="timer" class="timer">10:00</span>
+  </div>
+  <div class="divider"></div>
+  <div class="hud-section">
+    <span class="label">Alive</span>
+    <span id="alive-count" class="alive-count">--</span>
+  </div>
+  <div class="divider"></div>
+  <div class="hud-section task-section">
+    <span class="label">Tasks</span>
+    <span id="task-progress" class="task-progress">0/0</span>
+  </div>
+</div>
+
+<div id="notification" class="notification"></div>
+
+<script>
+(function() {
+  // ── State ──
+  var gamePhase = 'lobby'; // lobby, playing, meeting, game_over
+  var role = 0;            // 0=crew, 1=saboteur
+  var aliveCount = 0;
+  var tasksCompleted = 0;
+  var tasksRequired = 0;
+  var timerSeconds = 600;  // 10 minutes
+  var timerInterval = null;
+  var meetingPaused = false;
+
+  // ── DOM ──
+  var hudEl = document.getElementById('hud');
+  var roleBadge = document.getElementById('role-badge');
+  var timerEl = document.getElementById('timer');
+  var aliveEl = document.getElementById('alive-count');
+  var taskEl = document.getElementById('task-progress');
+  var notifEl = document.getElementById('notification');
+
+  // ── Read URL params ──
+  var params = new URLSearchParams(window.location.search);
+  var initialPhase = params.get('phase') || 'lobby';
+  setPhase(initialPhase);
+
+  // ── Timer ──
+  function formatTime(sec) {
+    var m = Math.floor(sec / 60);
+    var s = sec % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function updateTimerDisplay() {
+    timerEl.textContent = formatTime(timerSeconds);
+    timerEl.className = 'timer';
+    if (timerSeconds <= 60) timerEl.classList.add('danger');
+    else if (timerSeconds <= 120) timerEl.classList.add('warning');
+  }
+
+  function startTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(function() {
+      if (meetingPaused) return;
+      timerSeconds--;
+      updateTimerDisplay();
+      if (timerSeconds <= 0) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        // Signal time expired to Portals
+        PortalsSdk.sendMessageToUnity(JSON.stringify({
+          TaskName: 'Time_Expired',
+          TaskTargetState: 'SetNotActiveToActive'
+        }));
+      }
+    }, 1000);
+  }
+
+  function stopTimer() {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+  }
+
+  // ── Phase Management ──
+  function setPhase(phase) {
+    gamePhase = phase;
+    hudEl.className = 'hud phase-' + phase;
+  }
+
+  // ── Role Display ──
+  function updateRole(newRole) {
+    role = newRole;
+    if (role === 1) {
+      roleBadge.textContent = 'SABOTEUR';
+      roleBadge.className = 'role-badge role-saboteur';
+    } else if (gamePhase === 'playing' || gamePhase === 'meeting') {
+      roleBadge.textContent = 'CREW';
+      roleBadge.className = 'role-badge role-crew';
+    } else {
+      roleBadge.textContent = 'LOBBY';
+      roleBadge.className = 'role-badge role-unknown';
+    }
+  }
+
+  // ── Notification ──
+  var notifTimeout = null;
+  function showNotification(text, duration) {
+    duration = duration || 3000;
+    notifEl.textContent = text;
+    notifEl.classList.add('visible');
+    if (notifTimeout) clearTimeout(notifTimeout);
+    notifTimeout = setTimeout(function() {
+      notifEl.classList.remove('visible');
+    }, duration);
+  }
+
+  // ── Message Handler ──
+  PortalsSdk.setMessageListener(function(message) {
+    console.log('[HUD] Received:', message);
+
+    var msg = message;
+    if (typeof message === 'string') {
+      try { msg = JSON.parse(message); } catch(e) { msg = message; }
+    }
+    var msgStr = typeof msg === 'string' ? msg : JSON.stringify(msg);
+
+    // game_start_{tasksRequired}_{aliveCount}
+    if (msgStr.startsWith('game_start_')) {
+      var parts = msgStr.split('_');
+      tasksRequired = parseFloat(parts[2]) || 20;
+      aliveCount = parseFloat(parts[3]) || 8;
+      tasksCompleted = 0;
+      timerSeconds = 600; // 10 minutes
+      setPhase('playing');
+      updateRole(role);
+      aliveEl.textContent = aliveCount;
+      taskEl.textContent = tasksCompleted + '/' + Math.round(tasksRequired);
+      updateTimerDisplay();
+      startTimer();
+      return;
+    }
+
+    // countdown_N
+    if (msgStr.startsWith('countdown_')) {
+      var secs = parseInt(msgStr.split('_')[1]);
+      showNotification('Game starts in ' + secs + '...', 4500);
+      return;
+    }
+
+    // task_{completed}_{required}
+    if (msgStr.startsWith('task_')) {
+      var parts = msgStr.split('_');
+      tasksCompleted = parseFloat(parts[1]) || 0;
+      tasksRequired = parseFloat(parts[2]) || tasksRequired;
+      taskEl.textContent = Math.round(tasksCompleted) + '/' + Math.round(tasksRequired);
+      return;
+    }
+
+    // player_killed_{aliveCount}
+    if (msgStr.startsWith('player_killed_')) {
+      aliveCount = parseFloat(msgStr.split('_')[2]) || aliveCount;
+      aliveEl.textContent = aliveCount;
+      return;
+    }
+
+    // meeting_start_{reason}_{zone}
+    if (msgStr.startsWith('meeting_start_')) {
+      meetingPaused = true;
+      setPhase('meeting');
+      showNotification('EMERGENCY MEETING!', 5000);
+      return;
+    }
+
+    // meeting_end
+    if (msgStr === 'meeting_end') {
+      meetingPaused = false;
+      setPhase('playing');
+      return;
+    }
+
+    // game_over_*
+    if (msgStr.startsWith('game_over_')) {
+      stopTimer();
+      setPhase('game_over');
+      var reason = msgStr.replace('game_over_', '');
+      if (reason.startsWith('crew')) {
+        showNotification('CREW WINS!', 10000);
+      } else {
+        showNotification('SABOTEURS WIN!', 10000);
+      }
+      return;
+    }
+
+    // game_reset
+    if (msgStr === 'game_reset') {
+      stopTimer();
+      timerSeconds = 600;
+      tasksCompleted = 0;
+      tasksRequired = 0;
+      aliveCount = 0;
+      role = 0;
+      setPhase('lobby');
+      updateRole(0);
+      aliveEl.textContent = '--';
+      taskEl.textContent = '0/0';
+      updateTimerDisplay();
+      return;
+    }
+
+    // role_{0|1}
+    if (msgStr.startsWith('role_')) {
+      var r = parseInt(msgStr.split('_')[1]);
+      updateRole(r);
+      return;
+    }
+
+    // sab_cooldown_{seconds}
+    if (msgStr.startsWith('sab_cooldown_')) {
+      // Could display cooldown indicator for saboteurs
+      return;
+    }
+
+    // lights_out / lights_on
+    if (msgStr === 'lights_out') {
+      showNotification('LIGHTS OUT!', 5000);
+      return;
+    }
+    if (msgStr === 'lights_on') {
+      showNotification('Lights restored', 2000);
+      return;
+    }
+
+    // comms_down / comms_repaired
+    if (msgStr === 'comms_down') {
+      showNotification('Communications disrupted!', 4000);
+      return;
+    }
+    if (msgStr === 'comms_repaired') {
+      showNotification('Comms Array repaired!', 3000);
+      return;
+    }
+
+    // sabotage alerts
+    if (msgStr === 'sabotage_reactor_leak') {
+      showNotification('REACTOR LEAK DETECTED!', 5000);
+      return;
+    }
+    if (msgStr === 'sabotage_atmo_breach') {
+      showNotification('ATMOSPHERE BREACH!', 5000);
+      return;
+    }
+    if (msgStr === 'meltdown_start') {
+      showNotification('REACTOR MELTDOWN! 30 SECONDS!', 5000);
+      return;
+    }
+    if (msgStr === 'meltdown_stopped') {
+      showNotification('Reactor stabilized', 3000);
+      return;
+    }
+
+    // kz_warn_*
+    if (msgStr.startsWith('kz_warn_')) {
+      var zone = msgStr.replace('kz_warn_', '').toUpperCase();
+      showNotification('WARNING: ' + zone + ' LETHAL ZONE!', 3000);
+      return;
+    }
+  });
+
+  // ── Signal ready ──
+  setTimeout(function() {
+    console.log('[HUD] Ready');
+  }, 300);
+
+})();
+</script>
+</body>
+</html>
