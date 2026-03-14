@@ -202,186 +202,392 @@
     '5': 'Reactor', '6': 'Comms Array', '7': 'Airlock'
   };
 
-  // Meeting reason/zone set via message (meeting_start_reason_zone_alive)
+  var MAX_SLOTS = 12;
+  var MEETING_SPAWNS = {
+    1: {x: 5.0, z: -34.0},
+    2: {x: 4.3, z: -31.5},
+    3: {x: 2.5, z: -29.7},
+    4: {x: 0.0, z: -29.0},
+    5: {x: -2.5, z: -29.7},
+    6: {x: -4.3, z: -31.5},
+    7: {x: -5.0, z: -34.0},
+    8: {x: -4.3, z: -36.5},
+    9: {x: -2.5, z: -38.3},
+    10: {x: 0.0, z: -39.0},
+    11: {x: 2.5, z: -38.3},
+    12: {x: 4.3, z: -36.5}
+  };
+
   reasonEl.textContent = 'Waiting for meeting data...';
 
   var voted = false;
   var myVote = -1;
-  var timerSeconds = 45;
+  var selfName = '';
   var timerInterval = null;
-  var playerSlots = [];
-  var voteCounts = new Array(13).fill(0); // indices 1-12 + skip at 0
+  var timerDeadlineMs = 0;
+  var voteCounts = new Array(MAX_SLOTS + 1).fill(0);
+  var rosterBySlot = {};
+  var tallyDispatched = false;
+  var meetingResolved = false;
 
-  // Build player cards for slots 1-12
-  for (var i = 1; i <= 12; i++) {
-    playerSlots.push(i);
-    var card = document.createElement('div');
-    card.className = 'player-card';
-    card.id = 'card-' + i;
-    card.innerHTML =
-      '<div class="player-name" id="name-' + i + '">Player ' + i + '</div>' +
-      '<button class="vote-btn" id="btn-' + i + '" onclick="castVote(' + i + ')">VOTE</button>' +
-      '<div class="vote-count" id="vc-' + i + '">0 votes</div>';
-    gridEl.appendChild(card);
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
   }
 
-  // Timer
-  function updateTimer() {
-    var m = Math.floor(timerSeconds / 60);
-    var s = timerSeconds % 60;
-    timerEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
-    if (timerSeconds <= 10) timerEl.classList.add('warning');
+  function formatName(slot) {
+    var entry = rosterBySlot[slot];
+    return entry && entry.name ? entry.name : 'Open Slot ' + slot;
   }
 
-  timerInterval = setInterval(function() {
-    timerSeconds--;
-    updateTimer();
-    if (timerSeconds <= 0) {
+  function resetRoster() {
+    rosterBySlot = {};
+    for (var i = 1; i <= MAX_SLOTS; i++) {
+      rosterBySlot[i] = {
+        name: '',
+        present: false,
+        alive: false,
+        isSelf: false
+      };
+    }
+  }
+
+  function setButtonDisabled(btn, disabled) {
+    if (!btn) return;
+    btn.disabled = !!disabled;
+    btn.classList.toggle('disabled', !!disabled);
+  }
+
+  function buildCards() {
+    for (var i = 1; i <= MAX_SLOTS; i++) {
+      var card = document.createElement('div');
+      card.className = 'player-card dead';
+      card.id = 'card-' + i;
+      card.innerHTML =
+        '<div class="player-name" id="name-' + i + '">Open Slot ' + i + '</div>' +
+        '<div class="status-label dead-label" id="status-' + i + '">EMPTY</div>' +
+        '<button class="vote-btn disabled" id="btn-' + i + '" onclick="castVote(' + i + ')">VOTE</button>' +
+        '<div class="vote-count" id="vc-' + i + '">0 votes</div>';
+      gridEl.appendChild(card);
+    }
+  }
+
+  function updateVoteDisplay() {
+    for (var i = 1; i <= MAX_SLOTS; i++) {
+      var vc = document.getElementById('vc-' + i);
+      if (!vc) continue;
+      var count = voteCounts[i] || 0;
+      vc.textContent = count + ' vote' + (count === 1 ? '' : 's');
+      vc.classList.toggle('visible', count > 0);
+    }
+  }
+
+  function updateRosterDisplay() {
+    for (var i = 1; i <= MAX_SLOTS; i++) {
+      var entry = rosterBySlot[i];
+      var card = document.getElementById('card-' + i);
+      var nameEl = document.getElementById('name-' + i);
+      var statusLabel = document.getElementById('status-' + i);
+      var btn = document.getElementById('btn-' + i);
+      var isSelf = entry.present && selfName !== '' && entry.name === selfName;
+      if (!card || !nameEl || !statusLabel || !btn) continue;
+
+      nameEl.textContent = formatName(i);
+      card.classList.toggle('dead', !entry.present || !entry.alive);
+      card.classList.toggle('voted-for', voted && myVote === i);
+
+      if (!entry.present) {
+        statusLabel.textContent = 'EMPTY';
+        statusLabel.className = 'status-label dead-label';
+        btn.textContent = 'EMPTY';
+        setButtonDisabled(btn, true);
+        continue;
+      }
+
+      if (isSelf) {
+        statusLabel.textContent = 'YOU';
+        statusLabel.className = 'status-label you';
+      } else {
+        statusLabel.textContent = entry.alive ? 'ALIVE' : 'DEAD';
+        statusLabel.className = 'status-label' + (entry.alive ? '' : ' dead-label');
+      }
+
+      btn.textContent = 'VOTE';
+      setButtonDisabled(btn, voted || meetingResolved || !entry.alive);
+    }
+
+    setButtonDisabled(skipBtn, voted || meetingResolved);
+  }
+
+  function stopTimer() {
+    if (timerInterval) {
       clearInterval(timerInterval);
-      if (!voted) {
-        castVote(0); // auto-skip
+      timerInterval = null;
+    }
+  }
+
+  function renderTimer() {
+    var remainingSeconds = Math.max(0, Math.ceil((timerDeadlineMs - Date.now()) / 1000));
+    var minutes = Math.floor(remainingSeconds / 60);
+    var seconds = remainingSeconds % 60;
+    timerEl.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+    timerEl.classList.toggle('warning', remainingSeconds <= 10);
+    if (remainingSeconds <= 0 && !voted && !meetingResolved) {
+      castVote(0);
+    }
+  }
+
+  function startTimer(durationSeconds) {
+    timerDeadlineMs = Date.now() + durationSeconds * 1000;
+    stopTimer();
+    renderTimer();
+    timerInterval = setInterval(renderTimer, 1000);
+  }
+
+  function getClosestMeetingSlot(position) {
+    var closestSlot = 0;
+    var closestDistanceSq = Infinity;
+    for (var i = 1; i <= MAX_SLOTS; i++) {
+      var spawn = MEETING_SPAWNS[i];
+      var dx = position.x - spawn.x;
+      var dz = position.z - spawn.z;
+      var distanceSq = dx * dx + dz * dz;
+      if (distanceSq < closestDistanceSq) {
+        closestDistanceSq = distanceSq;
+        closestSlot = i;
       }
     }
-  }, 1000);
-  updateTimer();
+    if (closestDistanceSq > 16) {
+      return 0;
+    }
+    return closestSlot;
+  }
+
+  function applyPositionRoster(posData) {
+    if (!posData || typeof posData !== 'object') return;
+
+    var nextRoster = {};
+    for (var slot = 1; slot <= MAX_SLOTS; slot++) {
+      nextRoster[slot] = {
+        name: '',
+        present: false,
+        alive: false,
+        isSelf: false,
+        distanceSq: Infinity
+      };
+    }
+
+    Object.keys(posData).forEach(function(username) {
+      var position = posData[username];
+      if (!position || typeof position.x !== 'number' || typeof position.z !== 'number') return;
+      var slot = getClosestMeetingSlot(position);
+      if (!slot) return;
+
+      var spawn = MEETING_SPAWNS[slot];
+      var dx = position.x - spawn.x;
+      var dz = position.z - spawn.z;
+      var distanceSq = dx * dx + dz * dz;
+
+      if (distanceSq < nextRoster[slot].distanceSq) {
+        nextRoster[slot] = {
+          name: username,
+          present: true,
+          alive: true,
+          isSelf: selfName !== '' && username === selfName,
+          distanceSq: distanceSq
+        };
+      }
+    });
+
+    for (var i = 1; i <= MAX_SLOTS; i++) {
+      rosterBySlot[i] = {
+        name: nextRoster[i].name,
+        present: nextRoster[i].present,
+        alive: nextRoster[i].alive,
+        isSelf: nextRoster[i].isSelf
+      };
+    }
+    updateRosterDisplay();
+  }
+
+  function tryParseJson(raw) {
+    try {
+      return JSON.parse(raw);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function resetMeetingState() {
+    voted = false;
+    myVote = -1;
+    meetingResolved = false;
+    tallyDispatched = false;
+    voteCounts = new Array(MAX_SLOTS + 1).fill(0);
+    resultOverlay.classList.remove('visible');
+    resetRoster();
+    updateVoteDisplay();
+    updateRosterDisplay();
+    statusEl.textContent = 'Click a player to vote';
+    startTimer(45);
+  }
 
   window.castVote = function(slot) {
-    if (voted) return;
+    if (voted || meetingResolved) return;
+    if (slot !== 0) {
+      var target = rosterBySlot[slot];
+      if (!target || !target.present || !target.alive) return;
+    }
+
     voted = true;
     myVote = slot;
 
-    var taskName = slot === 0 ? 'Cast_Vote_Skip' : 'Cast_Vote_' + slot;
     PortalsSdk.sendMessageToUnity(JSON.stringify({
-      TaskName: taskName,
+      TaskName: slot === 0 ? 'Cast_Vote_Skip' : 'Cast_Vote_' + slot,
       TaskTargetState: 'SetNotActiveToActive'
     }));
 
-    // Disable all buttons
-    for (var i = 1; i <= 12; i++) {
-      var btn = document.getElementById('btn-' + i);
-      if (btn) btn.classList.add('disabled');
-    }
-    skipBtn.classList.add('disabled');
-
+    updateRosterDisplay();
     if (slot === 0) {
       statusEl.innerHTML = '<span class="my-vote">You voted to SKIP</span>';
     } else {
-      statusEl.innerHTML = '<span class="my-vote">You voted for Player ' + slot + '</span>';
-      var card = document.getElementById('card-' + slot);
-      if (card) card.classList.add('voted-for');
+      statusEl.innerHTML = '<span class="my-vote">You voted for ' + escapeHtml(formatName(slot)) + '</span>';
     }
   };
 
-  // Message handler
+  function showResult(ejected, slot, role) {
+    stopTimer();
+    meetingResolved = true;
+    updateRosterDisplay();
+
+    if (ejected) {
+      var roleText = role === 1 ? 'SABOTEUR' : 'CREW';
+      var roleColor = role === 1 ? '#FF4444' : '#00CCFF';
+      resultBox.innerHTML =
+        '<h2 class="eject">' + escapeHtml(formatName(slot)) + ' was ejected!</h2>' +
+        '<div class="role-reveal">They were: <span style="color:' + roleColor + '">' + roleText + '</span></div>';
+    } else {
+      resultBox.innerHTML =
+        '<h2 class="safe">No one was ejected.</h2>' +
+        '<div class="role-reveal">Tie vote or skip majority</div>';
+    }
+    resultOverlay.classList.add('visible');
+  }
+
+  buildCards();
+  resetRoster();
+  updateRosterDisplay();
+  renderTimer();
+
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+      renderTimer();
+      if (!meetingResolved && timerDeadlineMs > 0 && !timerInterval) {
+        timerInterval = setInterval(renderTimer, 1000);
+      }
+    }
+  });
+
+  window.addEventListener('focus', function() {
+    renderTimer();
+    if (!meetingResolved && timerDeadlineMs > 0 && !timerInterval) {
+      timerInterval = setInterval(renderTimer, 1000);
+    }
+  });
+
   var lastMsgId = '';
   var lastMsgTime = 0;
 
   PortalsSdk.setMessageListener(function(message) {
     var now = Date.now();
-    var msgId = message + '_' + Math.floor(now / 100);
-    if (msgId === lastMsgId && now - lastMsgTime < 200) return;
-    lastMsgId = msgId;
+    var messageKey = (typeof message === 'string' ? message : JSON.stringify(message)) + '_' + Math.floor(now / 100);
+    if (messageKey === lastMsgId && now - lastMsgTime < 200) return;
+    lastMsgId = messageKey;
     lastMsgTime = now;
 
     var msg = typeof message === 'string' ? message : JSON.stringify(message);
 
-    // meeting_start_reason_zone_alive
+    if (msg.startsWith('meeting_self_')) {
+      selfName = msg.substring('meeting_self_'.length);
+      updateRosterDisplay();
+      return;
+    }
+
     if (msg.startsWith('meeting_start_')) {
-      var mparts = msg.split('_');
-      var meetingReason = mparts[2] || '1';
-      var bodyZone = mparts[3] || '0';
+      var parts = msg.split('_');
+      var meetingReason = parts[2] || '1';
+      var bodyZone = parts[3] || '0';
       if (meetingReason === '1') {
         reasonEl.textContent = 'Body reported in: ' + (ZONE_NAMES[bodyZone] || 'Unknown');
       } else {
         reasonEl.textContent = 'Emergency button pressed';
       }
+      resetMeetingState();
       return;
     }
 
-    // tally_V1_V2_..._V12_Skip
+    if (msg.startsWith('pos_')) {
+      var posPayload = tryParseJson(msg.substring(4));
+      if (posPayload) {
+        applyPositionRoster(posPayload);
+      }
+      return;
+    }
+
     if (msg.startsWith('tally_')) {
-      var parts = msg.split('_');
-      // parts[1..12] = votes for slots 1-12, parts[13] = skip
-      var counts = [];
-      for (var i = 1; i <= 12; i++) {
-        counts[i] = parseFloat(parts[i]) || 0;
+      var tallyParts = msg.split('_');
+      for (var i = 1; i <= MAX_SLOTS; i++) {
+        voteCounts[i] = parseFloat(tallyParts[i]) || 0;
       }
-      var skipCount = parseFloat(parts[13]) || 0;
+      var skipCount = parseFloat(tallyParts[MAX_SLOTS + 1]) || 0;
+      updateVoteDisplay();
 
-      // Show vote counts
-      for (var j = 1; j <= 12; j++) {
-        var vc = document.getElementById('vc-' + j);
-        if (vc) {
-          vc.textContent = counts[j] + ' vote' + (counts[j] !== 1 ? 's' : '');
-          vc.classList.add('visible');
-        }
-      }
+      if (tallyDispatched) return;
+      tallyDispatched = true;
 
-      // Tally
       var maxVotes = 0;
       var maxSlot = -1;
       var tie = false;
-
-      for (var k = 1; k <= 12; k++) {
-        if (counts[k] > maxVotes) {
-          maxVotes = counts[k];
-          maxSlot = k;
+      for (var slot = 1; slot <= MAX_SLOTS; slot++) {
+        if (voteCounts[slot] > maxVotes) {
+          maxVotes = voteCounts[slot];
+          maxSlot = slot;
           tie = false;
-        } else if (counts[k] === maxVotes && counts[k] > 0) {
+        } else if (voteCounts[slot] === maxVotes && voteCounts[slot] > 0) {
           tie = true;
         }
       }
 
+      statusEl.textContent = 'Vote tallied. Waiting for ejection result...';
       if (tie || skipCount >= maxVotes || maxVotes === 0) {
         PortalsSdk.sendMessageToUnity(JSON.stringify({
           TaskName: 'No_Ejection',
           TaskTargetState: 'SetNotActiveToActive'
         }));
-        showResult(false, 0, 0);
       } else {
         PortalsSdk.sendMessageToUnity(JSON.stringify({
           TaskName: 'Eject_Player_' + maxSlot,
           TaskTargetState: 'SetNotActiveToActive'
         }));
-        showResult(true, maxSlot, 0);
       }
       return;
     }
 
-    // eject_N_role or eject_none
     if (msg.startsWith('eject_')) {
-      var parts2 = msg.split('_');
-      if (parts2[1] === 'none') {
+      var ejectParts = msg.split('_');
+      if (ejectParts[1] === 'none') {
         showResult(false, 0, 0);
       } else {
-        var ejSlot = parseInt(parts2[1]);
-        var ejRole = parseInt(parts2[2]) || 0;
-        showResult(true, ejSlot, ejRole);
+        showResult(true, parseInt(ejectParts[1], 10), parseInt(ejectParts[2], 10) || 0);
       }
       return;
     }
 
-    // game_reset
     if (msg === 'game_reset' || msg.startsWith('game_over_')) {
-      return;
+      stopTimer();
     }
   });
-
-  function showResult(ejected, slot, role) {
-    if (timerInterval) clearInterval(timerInterval);
-    var html = '';
-    if (ejected) {
-      var roleText = role === 1 ? 'SABOTEUR' : 'CREW';
-      var roleColor = role === 1 ? '#FF4444' : '#00CCFF';
-      html = '<h2 class="eject">Player ' + slot + ' was ejected!</h2>' +
-             '<div class="role-reveal">They were: <span style="color:' + roleColor + '">' + roleText + '</span></div>';
-    } else {
-      html = '<h2 class="safe">No one was ejected.</h2>' +
-             '<div class="role-reveal">Tie vote or skip majority</div>';
-    }
-    resultBox.innerHTML = html;
-    resultOverlay.classList.add('visible');
-  }
 })();
 </script>
 </body>

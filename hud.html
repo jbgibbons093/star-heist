@@ -123,9 +123,11 @@
   var aliveCount = 0;
   var tasksCompleted = 0;
   var tasksRequired = 0;
-  var timerSeconds = 480;  // 8 minutes
+  var timerRemainingMs = 480000; // 8 minutes
+  var timerEndMs = 0;
   var timerInterval = null;
   var meetingPaused = false;
+  var timerExpired = false;
 
   // ── DOM ──
   var hudEl = document.getElementById('hud');
@@ -148,28 +150,39 @@
   }
 
   function updateTimerDisplay() {
+    var timerSeconds = Math.max(0, Math.ceil(timerRemainingMs / 1000));
     timerEl.textContent = formatTime(timerSeconds);
     timerEl.className = 'timer';
     if (timerSeconds <= 60) timerEl.classList.add('danger');
     else if (timerSeconds <= 120) timerEl.classList.add('warning');
   }
 
-  function startTimer() {
+  function syncTimerFromClock() {
+    if (!meetingPaused && timerEndMs > 0) {
+      timerRemainingMs = Math.max(0, timerEndMs - Date.now());
+    }
+    updateTimerDisplay();
+
+    if (timerRemainingMs <= 0 && !timerExpired) {
+      timerExpired = true;
+      stopTimer();
+      PortalsSdk.sendMessageToUnity(JSON.stringify({
+        TaskName: 'Time_Expired',
+        TaskTargetState: 'SetNotActiveToActive'
+      }));
+    }
+  }
+
+  function ensureTimerLoop() {
     if (timerInterval) clearInterval(timerInterval);
-    timerInterval = setInterval(function() {
-      if (meetingPaused) return;
-      timerSeconds--;
-      updateTimerDisplay();
-      if (timerSeconds <= 0) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-        // Signal time expired to Portals
-        PortalsSdk.sendMessageToUnity(JSON.stringify({
-          TaskName: 'Time_Expired',
-          TaskTargetState: 'SetNotActiveToActive'
-        }));
-      }
-    }, 1000);
+    timerInterval = setInterval(syncTimerFromClock, 1000);
+  }
+
+  function startTimer() {
+    timerExpired = false;
+    timerEndMs = Date.now() + timerRemainingMs;
+    syncTimerFromClock();
+    ensureTimerLoop();
   }
 
   function stopTimer() {
@@ -177,6 +190,30 @@
       clearInterval(timerInterval);
       timerInterval = null;
     }
+  }
+
+  function pauseTimer() {
+    if (meetingPaused) return;
+    syncTimerFromClock();
+    meetingPaused = true;
+    timerEndMs = 0;
+    stopTimer();
+    updateTimerDisplay();
+  }
+
+  function resumeTimer() {
+    if (!meetingPaused || timerRemainingMs <= 0 || timerExpired) return;
+    meetingPaused = false;
+    timerEndMs = Date.now() + timerRemainingMs;
+    syncTimerFromClock();
+    ensureTimerLoop();
+  }
+
+  function resetTimer(seconds) {
+    timerRemainingMs = seconds * 1000;
+    timerEndMs = 0;
+    timerExpired = false;
+    updateTimerDisplay();
   }
 
   // ── Phase Management ──
@@ -228,12 +265,12 @@
       tasksRequired = parseFloat(parts[2]) || 20;
       aliveCount = parseFloat(parts[3]) || 8;
       tasksCompleted = 0;
-      timerSeconds = 480; // 8 minutes
+      resetTimer(480);
+      meetingPaused = false;
       setPhase('playing');
       updateRole(role);
       aliveEl.textContent = aliveCount;
       taskEl.textContent = tasksCompleted + '/' + Math.round(tasksRequired);
-      updateTimerDisplay();
       startTimer();
       return;
     }
@@ -263,7 +300,7 @@
 
     // meeting_start_{reason}_{zone}
     if (msgStr.startsWith('meeting_start_')) {
-      meetingPaused = true;
+      pauseTimer();
       setPhase('meeting');
       showNotification('EMERGENCY MEETING!', 5000);
       return;
@@ -271,8 +308,8 @@
 
     // meeting_end
     if (msgStr === 'meeting_end') {
-      meetingPaused = false;
       setPhase('playing');
+      resumeTimer();
       return;
     }
 
@@ -292,7 +329,8 @@
     // game_reset
     if (msgStr === 'game_reset') {
       stopTimer();
-      timerSeconds = 480;
+      resetTimer(480);
+      meetingPaused = false;
       tasksCompleted = 0;
       tasksRequired = 0;
       aliveCount = 0;
@@ -301,7 +339,6 @@
       updateRole(0);
       aliveEl.textContent = '--';
       taskEl.textContent = '0/0';
-      updateTimerDisplay();
       return;
     }
 
@@ -368,6 +405,22 @@
   setTimeout(function() {
     console.log('[HUD] Ready');
   }, 300);
+
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+      syncTimerFromClock();
+      if (!meetingPaused && timerEndMs > 0 && !timerExpired) {
+        ensureTimerLoop();
+      }
+    }
+  });
+
+  window.addEventListener('focus', function() {
+    syncTimerFromClock();
+    if (!meetingPaused && timerEndMs > 0 && !timerExpired) {
+      ensureTimerLoop();
+    }
+  });
 
 })();
 </script>
