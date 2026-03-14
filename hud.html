@@ -128,6 +128,9 @@
   var timerInterval = null;
   var meetingPaused = false;
   var timerExpired = false;
+  var lobbyCountdownEndMs = 0;
+  var lobbyCountdownTimeout = null;
+  var lobbyCountdownSent = false;
 
   // ── DOM ──
   var hudEl = document.getElementById('hud');
@@ -166,11 +169,19 @@
     if (timerRemainingMs <= 0 && !timerExpired) {
       timerExpired = true;
       stopTimer();
-      PortalsSdk.sendMessageToUnity(JSON.stringify({
-        TaskName: 'Time_Expired',
-        TaskTargetState: 'SetNotActiveToActive'
-      }));
+      sendTaskToUnity('Time_Expired');
     }
+  }
+
+  function sendTaskToUnity(taskName) {
+    if (!window.PortalsSdk || typeof PortalsSdk.sendMessageToUnity !== 'function') {
+      console.warn('[HUD] PortalsSdk unavailable, cannot send task:', taskName);
+      return;
+    }
+    PortalsSdk.sendMessageToUnity(JSON.stringify({
+      TaskName: taskName,
+      TaskTargetState: 'SetNotActiveToActive'
+    }));
   }
 
   function ensureTimerLoop() {
@@ -214,6 +225,43 @@
     timerEndMs = 0;
     timerExpired = false;
     updateTimerDisplay();
+  }
+
+  function clearLobbyCountdown() {
+    lobbyCountdownEndMs = 0;
+    lobbyCountdownSent = false;
+    if (lobbyCountdownTimeout) {
+      clearTimeout(lobbyCountdownTimeout);
+      lobbyCountdownTimeout = null;
+    }
+  }
+
+  function syncLobbyCountdown() {
+    if (lobbyCountdownSent || lobbyCountdownEndMs <= 0 || gamePhase !== 'lobby') {
+      return;
+    }
+    var remainingMs = lobbyCountdownEndMs - Date.now();
+    if (remainingMs <= 0) {
+      lobbyCountdownSent = true;
+      lobbyCountdownEndMs = 0;
+      if (lobbyCountdownTimeout) {
+        clearTimeout(lobbyCountdownTimeout);
+        lobbyCountdownTimeout = null;
+      }
+      sendTaskToUnity('GameStart');
+      return;
+    }
+    if (lobbyCountdownTimeout) {
+      clearTimeout(lobbyCountdownTimeout);
+    }
+    lobbyCountdownTimeout = setTimeout(syncLobbyCountdown, remainingMs);
+  }
+
+  function startLobbyCountdown(seconds) {
+    lobbyCountdownSent = false;
+    lobbyCountdownEndMs = Date.now() + (seconds * 1000);
+    showNotification('Game starts in ' + seconds + '...', Math.max(4500, seconds * 1000));
+    syncLobbyCountdown();
   }
 
   // ── Phase Management ──
@@ -261,6 +309,7 @@
 
     // game_start_{tasksRequired}_{aliveCount}
     if (msgStr.startsWith('game_start_')) {
+      clearLobbyCountdown();
       var parts = msgStr.split('_');
       tasksRequired = parseFloat(parts[2]) || 20;
       aliveCount = parseFloat(parts[3]) || 8;
@@ -278,7 +327,7 @@
     // countdown_N
     if (msgStr.startsWith('countdown_')) {
       var secs = parseInt(msgStr.split('_')[1]);
-      showNotification('Game starts in ' + secs + '...', 4500);
+      startLobbyCountdown(secs);
       return;
     }
 
@@ -315,6 +364,7 @@
 
     // game_over_*
     if (msgStr.startsWith('game_over_')) {
+      clearLobbyCountdown();
       stopTimer();
       setPhase('game_over');
       var reason = msgStr.replace('game_over_', '');
@@ -328,6 +378,7 @@
 
     // game_reset
     if (msgStr === 'game_reset') {
+      clearLobbyCountdown();
       stopTimer();
       resetTimer(480);
       meetingPaused = false;
@@ -408,6 +459,7 @@
 
   document.addEventListener('visibilitychange', function() {
     if (!document.hidden) {
+      syncLobbyCountdown();
       syncTimerFromClock();
       if (!meetingPaused && timerEndMs > 0 && !timerExpired) {
         ensureTimerLoop();
@@ -416,6 +468,7 @@
   });
 
   window.addEventListener('focus', function() {
+    syncLobbyCountdown();
     syncTimerFromClock();
     if (!meetingPaused && timerEndMs > 0 && !timerExpired) {
       ensureTimerLoop();
