@@ -189,11 +189,6 @@
 
 <script>
 (function() {
-  var params = new URLSearchParams(window.location.search);
-  var meetingReason = params.get('reason') || '1';
-  var bodyZone = params.get('zone') || '0';
-  var aliveCount = parseInt(params.get('alive')) || 8;
-
   var timerEl = document.getElementById('timer');
   var gridEl = document.getElementById('player-grid');
   var skipBtn = document.getElementById('skip-btn');
@@ -207,11 +202,8 @@
     '5': 'Reactor', '6': 'Comms Array', '7': 'Airlock'
   };
 
-  if (meetingReason === '1') {
-    reasonEl.textContent = 'Body reported in: ' + (ZONE_NAMES[bodyZone] || 'Unknown');
-  } else {
-    reasonEl.textContent = 'Emergency button pressed';
-  }
+  // Meeting reason/zone set via message (meeting_start_reason_zone_alive)
+  reasonEl.textContent = 'Waiting for meeting data...';
 
   var voted = false;
   var myVote = -1;
@@ -292,6 +284,19 @@
     lastMsgTime = now;
 
     var msg = typeof message === 'string' ? message : JSON.stringify(message);
+
+    // meeting_start_reason_zone_alive
+    if (msg.startsWith('meeting_start_')) {
+      var mparts = msg.split('_');
+      var meetingReason = mparts[2] || '1';
+      var bodyZone = mparts[3] || '0';
+      if (meetingReason === '1') {
+        reasonEl.textContent = 'Body reported in: ' + (ZONE_NAMES[bodyZone] || 'Unknown');
+      } else {
+        reasonEl.textContent = 'Emergency button pressed';
+      }
+      return;
+    }
 
     // tally_V1_V2_..._V12_Skip
     if (msg.startsWith('tally_')) {

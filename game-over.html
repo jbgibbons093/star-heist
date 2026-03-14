@@ -124,14 +124,11 @@
 
 <script>
 (function() {
-  var params = new URLSearchParams(window.location.search);
-  var winner = params.get('winner') || 'crew';
-  var reason = params.get('reason') || 'tasks';
-
   var panel = document.getElementById('panel');
   var titleEl = document.getElementById('title');
   var subtitleEl = document.getElementById('subtitle');
   var statsEl = document.getElementById('stats');
+  var configured = false;
 
   var CONFIGS = {
     'crew_tasks': {
@@ -161,12 +158,15 @@
     }
   };
 
-  var key = winner + '_' + reason;
-  var config = CONFIGS[key] || CONFIGS['crew_tasks'];
-
-  panel.classList.add(config.theme);
-  titleEl.textContent = config.title;
-  subtitleEl.textContent = config.subtitle;
+  function applyConfig(winner, reason) {
+    if (configured) return;
+    var key = winner + '_' + reason;
+    var config = CONFIGS[key] || CONFIGS['crew_tasks'];
+    panel.classList.add(config.theme);
+    titleEl.textContent = config.title;
+    subtitleEl.textContent = config.subtitle;
+    configured = true;
+  }
 
   // Signal ready for stats
   setTimeout(function() {
@@ -195,6 +195,15 @@
     lastMsgTime = now;
 
     var msg = typeof message === 'string' ? message : JSON.stringify(message);
+
+    // gameover_winner_reason (e.g. gameover_crew_tasks)
+    if (msg.startsWith('gameover_')) {
+      var parts = msg.split('_');
+      if (parts.length >= 3) {
+        applyConfig(parts[1], parts[2]);
+      }
+      return;
+    }
 
     // stats_elapsed_completed_eliminations_meetings
     if (msg.startsWith('stats_')) {
