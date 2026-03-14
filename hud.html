@@ -99,7 +99,7 @@
   </div>
   <div class="divider"></div>
   <div class="hud-section">
-    <span id="timer" class="timer">10:00</span>
+    <span id="timer" class="timer">8:00</span>
   </div>
   <div class="divider"></div>
   <div class="hud-section">
@@ -123,7 +123,7 @@
   var aliveCount = 0;
   var tasksCompleted = 0;
   var tasksRequired = 0;
-  var timerSeconds = 600;  // 10 minutes
+  var timerSeconds = 480;  // 8 minutes
   var timerInterval = null;
   var meetingPaused = false;
 
@@ -228,7 +228,7 @@
       tasksRequired = parseFloat(parts[2]) || 20;
       aliveCount = parseFloat(parts[3]) || 8;
       tasksCompleted = 0;
-      timerSeconds = 600; // 10 minutes
+      timerSeconds = 480; // 8 minutes
       setPhase('playing');
       updateRole(role);
       aliveEl.textContent = aliveCount;
@@ -292,7 +292,7 @@
     // game_reset
     if (msgStr === 'game_reset') {
       stopTimer();
-      timerSeconds = 600;
+      timerSeconds = 480;
       tasksCompleted = 0;
       tasksRequired = 0;
       aliveCount = 0;

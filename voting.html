@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Star Heist Voting</title>
+<script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: transparent; overflow: hidden; font-family: 'Courier New', monospace; }
+
+  .overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+  }
+
+  .voting-panel {
+    background: rgba(10, 10, 30, 0.95);
+    border: 2px solid rgba(255, 200, 0, 0.5);
+    border-radius: 12px;
+    padding: 20px;
+    width: 700px;
+    max-height: 520px;
+    overflow-y: auto;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .header h1 {
+    color: #FFAA00;
+    font-size: 22px;
+    margin-bottom: 4px;
+  }
+  .header .reason {
+    color: #aaa;
+    font-size: 13px;
+  }
+  .header .timer {
+    color: #FF4444;
+    font-size: 28px;
+    font-weight: bold;
+    margin-top: 6px;
+  }
+  .header .timer.warning { animation: pulse 1s infinite; }
+
+  .player-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .player-card {
+    background: rgba(30, 30, 60, 0.8);
+    border: 1px solid rgba(100, 100, 200, 0.3);
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+  }
+  .player-card.dead {
+    opacity: 0.4;
+    border-color: rgba(100, 0, 0, 0.3);
+  }
+  .player-card.voted-for {
+    border-color: rgba(255, 200, 0, 0.6);
+    background: rgba(60, 50, 0, 0.5);
+  }
+
+  .player-name {
+    color: #ddd;
+    font-size: 13px;
+    font-weight: bold;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .player-card.dead .player-name { color: #666; text-decoration: line-through; }
+
+  .vote-btn {
+    padding: 5px 14px;
+    background: rgba(0, 100, 200, 0.6);
+    border: 1px solid rgba(0, 150, 255, 0.4);
+    border-radius: 4px;
+    color: #aaddff;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .vote-btn:hover { background: rgba(0, 130, 255, 0.8); color: #fff; }
+  .vote-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+
+  .status-label {
+    color: #666;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .status-label.you { color: #00CCFF; }
+  .status-label.dead-label { color: #884444; }
+
+  .skip-row {
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .skip-btn {
+    padding: 8px 30px;
+    background: rgba(80, 80, 80, 0.6);
+    border: 1px solid rgba(150, 150, 150, 0.4);
+    border-radius: 6px;
+    color: #ccc;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .skip-btn:hover { background: rgba(120, 120, 120, 0.7); color: #fff; }
+  .skip-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+
+  .footer {
+    text-align: center;
+    color: #888;
+    font-size: 12px;
+  }
+  .footer .my-vote { color: #FFAA00; }
+
+  .result-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 10;
+  }
+  .result-overlay.visible { display: flex; }
+  .result-box {
+    text-align: center;
+    padding: 40px;
+  }
+  .result-box h2 { font-size: 28px; margin-bottom: 10px; }
+  .result-box .eject { color: #FF4444; }
+  .result-box .safe { color: #00FF88; }
+  .result-box .role-reveal { color: #FFAA00; font-size: 16px; margin-top: 8px; }
+
+  .vote-count {
+    color: #FFAA00;
+    font-size: 11px;
+    margin-top: 4px;
+    display: none;
+  }
+  .vote-count.visible { display: block; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+</style>
+</head>
+<body>
+
+<div class="overlay">
+  <div class="voting-panel">
+    <div class="header">
+      <h1 id="title">EMERGENCY MEETING</h1>
+      <div class="reason" id="reason"></div>
+      <div class="timer" id="timer">0:45</div>
+    </div>
+    <div class="player-grid" id="player-grid"></div>
+    <div class="skip-row">
+      <button class="skip-btn" id="skip-btn" onclick="castVote(0)">SKIP VOTE</button>
+    </div>
+    <div class="footer">
+      <span id="vote-status">Click a player to vote</span>
+    </div>
+  </div>
+</div>
+
+<div class="result-overlay" id="result-overlay">
+  <div class="result-box" id="result-box"></div>
+</div>
+
+<script>
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  var meetingReason = params.get('reason') || '1';
+  var bodyZone = params.get('zone') || '0';
+  var aliveCount = parseInt(params.get('alive')) || 8;
+
+  var timerEl = document.getElementById('timer');
+  var gridEl = document.getElementById('player-grid');
+  var skipBtn = document.getElementById('skip-btn');
+  var statusEl = document.getElementById('vote-status');
+  var reasonEl = document.getElementById('reason');
+  var resultOverlay = document.getElementById('result-overlay');
+  var resultBox = document.getElementById('result-box');
+
+  var ZONE_NAMES = {
+    '1': 'Bridge', '2': 'Engine Room', '3': 'Cargo Bay', '4': 'Med Bay',
+    '5': 'Reactor', '6': 'Comms Array', '7': 'Airlock'
+  };
+
+  if (meetingReason === '1') {
+    reasonEl.textContent = 'Body reported in: ' + (ZONE_NAMES[bodyZone] || 'Unknown');
+  } else {
+    reasonEl.textContent = 'Emergency button pressed';
+  }
+
+  var voted = false;
+  var myVote = -1;
+  var timerSeconds = 45;
+  var timerInterval = null;
+  var playerSlots = [];
+  var voteCounts = new Array(13).fill(0); // indices 1-12 + skip at 0
+
+  // Build player cards for slots 1-12
+  for (var i = 1; i <= 12; i++) {
+    playerSlots.push(i);
+    var card = document.createElement('div');
+    card.className = 'player-card';
+    card.id = 'card-' + i;
+    card.innerHTML =
+      '<div class="player-name" id="name-' + i + '">Player ' + i + '</div>' +
+      '<button class="vote-btn" id="btn-' + i + '" onclick="castVote(' + i + ')">VOTE</button>' +
+      '<div class="vote-count" id="vc-' + i + '">0 votes</div>';
+    gridEl.appendChild(card);
+  }
+
+  // Timer
+  function updateTimer() {
+    var m = Math.floor(timerSeconds / 60);
+    var s = timerSeconds % 60;
+    timerEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    if (timerSeconds <= 10) timerEl.classList.add('warning');
+  }
+
+  timerInterval = setInterval(function() {
+    timerSeconds--;
+    updateTimer();
+    if (timerSeconds <= 0) {
+      clearInterval(timerInterval);
+      if (!voted) {
+        castVote(0); // auto-skip
+      }
+    }
+  }, 1000);
+  updateTimer();
+
+  window.castVote = function(slot) {
+    if (voted) return;
+    voted = true;
+    myVote = slot;
+
+    var taskName = slot === 0 ? 'Cast_Vote_Skip' : 'Cast_Vote_' + slot;
+    PortalsSdk.sendMessageToUnity(JSON.stringify({
+      TaskName: taskName,
+      TaskTargetState: 'SetNotActiveToActive'
+    }));
+
+    // Disable all buttons
+    for (var i = 1; i <= 12; i++) {
+      var btn = document.getElementById('btn-' + i);
+      if (btn) btn.classList.add('disabled');
+    }
+    skipBtn.classList.add('disabled');
+
+    if (slot === 0) {
+      statusEl.innerHTML = '<span class="my-vote">You voted to SKIP</span>';
+    } else {
+      statusEl.innerHTML = '<span class="my-vote">You voted for Player ' + slot + '</span>';
+      var card = document.getElementById('card-' + slot);
+      if (card) card.classList.add('voted-for');
+    }
+  };
+
+  // Message handler
+  var lastMsgId = '';
+  var lastMsgTime = 0;
+
+  PortalsSdk.setMessageListener(function(message) {
+    var now = Date.now();
+    var msgId = message + '_' + Math.floor(now / 100);
+    if (msgId === lastMsgId && now - lastMsgTime < 200) return;
+    lastMsgId = msgId;
+    lastMsgTime = now;
+
+    var msg = typeof message === 'string' ? message : JSON.stringify(message);
+
+    // tally_V1_V2_..._V12_Skip
+    if (msg.startsWith('tally_')) {
+      var parts = msg.split('_');
+      // parts[1..12] = votes for slots 1-12, parts[13] = skip
+      var counts = [];
+      for (var i = 1; i <= 12; i++) {
+        counts[i] = parseFloat(parts[i]) || 0;
+      }
+      var skipCount = parseFloat(parts[13]) || 0;
+
+      // Show vote counts
+      for (var j = 1; j <= 12; j++) {
+        var vc = document.getElementById('vc-' + j);
+        if (vc) {
+          vc.textContent = counts[j] + ' vote' + (counts[j] !== 1 ? 's' : '');
+          vc.classList.add('visible');
+        }
+      }
+
+      // Tally
+      var maxVotes = 0;
+      var maxSlot = -1;
+      var tie = false;
+
+      for (var k = 1; k <= 12; k++) {
+        if (counts[k] > maxVotes) {
+          maxVotes = counts[k];
+          maxSlot = k;
+          tie = false;
+        } else if (counts[k] === maxVotes && counts[k] > 0) {
+          tie = true;
+        }
+      }
+
+      if (tie || skipCount >= maxVotes || maxVotes === 0) {
+        PortalsSdk.sendMessageToUnity(JSON.stringify({
+          TaskName: 'No_Ejection',
+          TaskTargetState: 'SetNotActiveToActive'
+        }));
+        showResult(false, 0, 0);
+      } else {
+        PortalsSdk.sendMessageToUnity(JSON.stringify({
+          TaskName: 'Eject_Player_' + maxSlot,
+          TaskTargetState: 'SetNotActiveToActive'
+        }));
+        showResult(true, maxSlot, 0);
+      }
+      return;
+    }
+
+    // eject_N_role or eject_none
+    if (msg.startsWith('eject_')) {
+      var parts2 = msg.split('_');
+      if (parts2[1] === 'none') {
+        showResult(false, 0, 0);
+      } else {
+        var ejSlot = parseInt(parts2[1]);
+        var ejRole = parseInt(parts2[2]) || 0;
+        showResult(true, ejSlot, ejRole);
+      }
+      return;
+    }
+
+    // game_reset
+    if (msg === 'game_reset' || msg.startsWith('game_over_')) {
+      return;
+    }
+  });
+
+  function showResult(ejected, slot, role) {
+    if (timerInterval) clearInterval(timerInterval);
+    var html = '';
+    if (ejected) {
+      var roleText = role === 1 ? 'SABOTEUR' : 'CREW';
+      var roleColor = role === 1 ? '#FF4444' : '#00CCFF';
+      html = '<h2 class="eject">Player ' + slot + ' was ejected!</h2>' +
+             '<div class="role-reveal">They were: <span style="color:' + roleColor + '">' + roleText + '</span></div>';
+    } else {
+      html = '<h2 class="safe">No one was ejected.</h2>' +
+             '<div class="role-reveal">Tie vote or skip majority</div>';
+    }
+    resultBox.innerHTML = html;
+    resultOverlay.classList.add('visible');
+  }
+})();
+</script>
+</body>
+</html>

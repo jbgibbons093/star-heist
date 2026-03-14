@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saboteur Panel</title>
+<script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: transparent; overflow: hidden; font-family: 'Courier New', monospace; }
+
+  .panel {
+    position: fixed;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(40, 0, 0, 0.9);
+    border: 1px solid rgba(255, 0, 0, 0.4);
+    border-radius: 8px;
+  }
+
+  .panel.hidden { display: none; }
+
+  .cat-btn {
+    padding: 8px 16px;
+    background: rgba(80, 0, 0, 0.8);
+    border: 1px solid rgba(255, 60, 60, 0.4);
+    border-radius: 6px;
+    color: #ff6666;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 100px;
+    text-align: center;
+  }
+  .cat-btn:hover:not(.disabled) { background: rgba(120, 0, 0, 0.9); border-color: #ff4444; }
+  .cat-btn.active { background: rgba(150, 0, 0, 0.9); border-color: #ff0000; color: #fff; }
+  .cat-btn.disabled { opacity: 0.4; cursor: not-allowed; color: #884444; }
+
+  .cooldown-text {
+    display: block;
+    font-size: 10px;
+    color: #884444;
+    margin-top: 2px;
+  }
+
+  .submenu {
+    position: fixed;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 12px;
+    background: rgba(20, 0, 0, 0.95);
+    border: 1px solid rgba(255, 0, 0, 0.3);
+    border-radius: 8px;
+    max-width: 500px;
+    justify-content: center;
+  }
+  .submenu.visible { display: flex; }
+
+  .sub-btn {
+    padding: 6px 12px;
+    background: rgba(60, 0, 0, 0.8);
+    border: 1px solid rgba(255, 40, 40, 0.3);
+    border-radius: 4px;
+    color: #ff8888;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .sub-btn:hover { background: rgba(100, 0, 0, 0.9); color: #fff; }
+</style>
+</head>
+<body>
+
+<div id="panel" class="panel">
+  <button class="cat-btn" data-cat="trap" onclick="toggleCategory('trap')">
+    TRAP<span class="cooldown-text" id="cd-trap">READY</span>
+  </button>
+  <button class="cat-btn" data-cat="killzone" onclick="toggleCategory('killzone')">
+    KILL ZONE<span class="cooldown-text" id="cd-kz">READY</span>
+  </button>
+  <button class="cat-btn" data-cat="sabotage" onclick="toggleCategory('sabotage')">
+    SABOTAGE<span class="cooldown-text" id="cd-sab">READY</span>
+  </button>
+</div>
+
+<div id="submenu" class="submenu"></div>
+
+<script>
+(function() {
+  var panel = document.getElementById('panel');
+  var submenu = document.getElementById('submenu');
+  var activeCategory = null;
+  var cooldownSeconds = 0;
+  var cooldownInterval = null;
+
+  var ACTIONS = {
+    trap: [
+      {label: 'Corridor A', task: 'Arm_Trap_CorridorA'},
+      {label: 'Corridor B', task: 'Arm_Trap_CorridorB'},
+      {label: 'Corridor C', task: 'Arm_Trap_CorridorC'},
+      {label: 'MedBay Entry', task: 'Arm_Trap_MedBayEntry'},
+      {label: 'Cargo Entry', task: 'Arm_Trap_CargoEntry'},
+      {label: 'Engine Entry', task: 'Arm_Trap_EngineEntry'},
+    ],
+    killzone: [
+      {label: 'Engine Room', task: 'Activate_KZ_EngineRoom'},
+      {label: 'Med Bay', task: 'Activate_KZ_MedBay'},
+      {label: 'Cargo Bay', task: 'Activate_KZ_CargoBay'},
+      {label: 'Reactor', task: 'Activate_KZ_Reactor'},
+    ],
+    sabotage: [
+      {label: 'Reactor Leak', task: 'Activate_ReactorLeak'},
+      {label: 'Atmo Breach', task: 'Activate_AtmoBreach'},
+      {label: 'Lights Out', task: 'Activate_LightsOut'},
+      {label: 'Comms Down', task: 'Sabotage_Comms'},
+      {label: 'Reactor Meltdown', task: 'Sabotage_Reactor_Meltdown'},
+    ],
+  };
+
+  window.toggleCategory = function(cat) {
+    if (cooldownSeconds > 0) return;
+    if (activeCategory === cat) {
+      activeCategory = null;
+      submenu.classList.remove('visible');
+      document.querySelectorAll('.cat-btn').forEach(function(b) { b.classList.remove('active'); });
+      return;
+    }
+    activeCategory = cat;
+    document.querySelectorAll('.cat-btn').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.cat === cat);
+    });
+    renderSubmenu(cat);
+  };
+
+  function renderSubmenu(cat) {
+    submenu.innerHTML = '';
+    ACTIONS[cat].forEach(function(action) {
+      var btn = document.createElement('button');
+      btn.className = 'sub-btn';
+      btn.textContent = action.label;
+      btn.onclick = function() { executeAction(action.task); };
+      submenu.appendChild(btn);
+    });
+    submenu.classList.add('visible');
+  }
+
+  function executeAction(taskName) {
+    PortalsSdk.sendMessageToUnity(JSON.stringify({
+      TaskName: taskName,
+      TaskTargetState: 'SetNotActiveToActive'
+    }));
+    activeCategory = null;
+    submenu.classList.remove('visible');
+    document.querySelectorAll('.cat-btn').forEach(function(b) { b.classList.remove('active'); });
+    startCooldown(30);
+  }
+
+  function startCooldown(seconds) {
+    cooldownSeconds = seconds;
+    if (cooldownInterval) clearInterval(cooldownInterval);
+    updateCooldownDisplay();
+    document.querySelectorAll('.cat-btn').forEach(function(b) { b.classList.add('disabled'); });
+    cooldownInterval = setInterval(function() {
+      cooldownSeconds--;
+      updateCooldownDisplay();
+      if (cooldownSeconds <= 0) {
+        clearInterval(cooldownInterval);
+        cooldownInterval = null;
+        document.querySelectorAll('.cat-btn').forEach(function(b) { b.classList.remove('disabled'); });
+      }
+    }, 1000);
+  }
+
+  function updateCooldownDisplay() {
+    var text = cooldownSeconds > 0 ? cooldownSeconds + 's' : 'READY';
+    document.getElementById('cd-trap').textContent = text;
+    document.getElementById('cd-kz').textContent = text;
+    document.getElementById('cd-sab').textContent = text;
+  }
+
+  // Message dedup
+  var lastMsgId = '';
+  var lastMsgTime = 0;
+
+  PortalsSdk.setMessageListener(function(message) {
+    var now = Date.now();
+    var msgId = message + '_' + Math.floor(now / 100);
+    if (msgId === lastMsgId && now - lastMsgTime < 200) return;
+    lastMsgId = msgId;
+    lastMsgTime = now;
+
+    var msg = typeof message === 'string' ? message : JSON.stringify(message);
+
+    // sab_cooldown_{seconds}
+    if (msg.startsWith('sab_cooldown_')) {
+      var secs = parseInt(msg.split('_')[2]);
+      if (secs > 0 && secs !== cooldownSeconds) startCooldown(secs);
+      return;
+    }
+
+    // meeting_start — hide panel
+    if (msg.startsWith('meeting_start_')) {
+      panel.classList.add('hidden');
+      submenu.classList.remove('visible');
+      activeCategory = null;
+      return;
+    }
+
+    // meeting_end — show panel
+    if (msg === 'meeting_end') {
+      panel.classList.remove('hidden');
+      cooldownSeconds = 0;
+      if (cooldownInterval) { clearInterval(cooldownInterval); cooldownInterval = null; }
+      updateCooldownDisplay();
+      document.querySelectorAll('.cat-btn').forEach(function(b) { b.classList.remove('disabled'); });
+      return;
+    }
+
+    // game_reset or game_over — hide panel
+    if (msg === 'game_reset' || msg.startsWith('game_over_')) {
+      panel.classList.add('hidden');
+      submenu.classList.remove('visible');
+      return;
+    }
+  });
+})();
+</script>
+</body>
+</html>

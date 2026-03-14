@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Security Log</title>
+<script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: transparent; overflow: hidden; font-family: 'Courier New', monospace; }
+
+  .log-panel {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    width: 340px;
+    max-height: 420px;
+    background: rgba(5, 10, 20, 0.95);
+    border: 1px solid rgba(0, 200, 255, 0.3);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .log-header {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(0, 200, 255, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .log-title {
+    color: #00CCFF;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 1px;
+  }
+  .log-status {
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #00FF88;
+  }
+  .status-dot.offline { background: #FF4444; }
+  .status-text { color: #00FF88; }
+  .status-text.offline { color: #FF4444; }
+
+  .log-entries {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 14px;
+    max-height: 340px;
+  }
+  .log-entries::-webkit-scrollbar { width: 4px; }
+  .log-entries::-webkit-scrollbar-track { background: transparent; }
+  .log-entries::-webkit-scrollbar-thumb { background: rgba(0, 200, 255, 0.3); border-radius: 2px; }
+
+  .log-entry {
+    padding: 3px 0;
+    font-size: 12px;
+    color: #aaa;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  }
+  .log-time { color: #666; }
+  .log-player { color: #ddd; }
+  .log-zone { color: #00CCFF; }
+  .log-arrow { color: #444; }
+
+  .offline-overlay {
+    display: none;
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    border-radius: 8px;
+    z-index: 5;
+  }
+  .offline-overlay.visible { display: flex; }
+  .offline-text {
+    color: #FF4444;
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 2px;
+  }
+  .offline-sub {
+    color: #884444;
+    font-size: 12px;
+    margin-top: 6px;
+  }
+  .glitch {
+    animation: glitch 0.3s infinite;
+  }
+  @keyframes glitch {
+    0% { transform: translate(0); }
+    20% { transform: translate(-2px, 1px); }
+    40% { transform: translate(2px, -1px); }
+    60% { transform: translate(-1px, 2px); }
+    80% { transform: translate(1px, -2px); }
+    100% { transform: translate(0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="log-panel">
+  <div class="log-header">
+    <span class="log-title">SECURITY LOG</span>
+    <div class="log-status">
+      <span class="status-dot" id="status-dot"></span>
+      <span class="status-text" id="status-text">ONLINE</span>
+    </div>
+  </div>
+  <div class="log-entries" id="log-entries"></div>
+  <div class="offline-overlay" id="offline-overlay">
+    <div class="offline-text glitch">SIGNAL LOST</div>
+    <div class="offline-sub">Comms Array offline</div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var entriesEl = document.getElementById('log-entries');
+  var statusDot = document.getElementById('status-dot');
+  var statusText = document.getElementById('status-text');
+  var offlineOverlay = document.getElementById('offline-overlay');
+
+  var online = true;
+  var playerZones = {}; // {username: zoneName}
+  var gameStartTime = Date.now();
+  var maxEntries = 100;
+
+  // Zone boundaries (Unity coords, center + half-size)
+  var ZONES = [
+    {name: 'Lobby',   cx: 0,   cz: 0,    hw: 10, hd: 10},
+    {name: 'Bridge',  cx: 0,   cz: -34,  hw: 8,  hd: 8},
+    {name: 'Airlock', cx: 0,   cz: -62,  hw: 8,  hd: 8},
+    {name: 'Engine',  cx: -34, cz: 0,    hw: 8,  hd: 8},
+    {name: 'MedBay',  cx: 34,  cz: 0,    hw: 8,  hd: 8},
+    {name: 'Cargo',   cx: -34, cz: 34,   hw: 8,  hd: 8},
+    {name: 'Comms',   cx: 0,   cz: 34,   hw: 8,  hd: 8},
+    {name: 'Reactor', cx: 34,  cz: 34,   hw: 8,  hd: 8},
+  ];
+
+  var CORRIDORS = [
+    {name: 'Corridor LB',  cx: 0,   cz: -17, hw: 3,  hd: 9},
+    {name: 'Corridor BA',  cx: 0,   cz: -48, hw: 3,  hd: 10},
+    {name: 'Corridor LE',  cx: -17, cz: 0,   hw: 9,  hd: 3},
+    {name: 'Corridor LM',  cx: 17,  cz: 0,   hw: 9,  hd: 3},
+    {name: 'Corridor LC',  cx: 0,   cz: 17,  hw: 3,  hd: 9},
+    {name: 'Corridor EC',  cx: -34, cz: 17,  hw: 3,  hd: 9},
+    {name: 'Corridor MR',  cx: 34,  cz: 17,  hw: 3,  hd: 9},
+  ];
+
+  function detectZone(x, z) {
+    // Check zones first (higher priority)
+    for (var i = 0; i < ZONES.length; i++) {
+      var zone = ZONES[i];
+      if (Math.abs(x - zone.cx) <= zone.hw && Math.abs(z - zone.cz) <= zone.hd) {
+        return zone.name;
+      }
+    }
+    // Check corridors
+    for (var j = 0; j < CORRIDORS.length; j++) {
+      var c = CORRIDORS[j];
+      if (Math.abs(x - c.cx) <= c.hw && Math.abs(z - c.cz) <= c.hd) {
+        return c.name;
+      }
+    }
+    return 'Unknown';
+  }
+
+  function getTimeStr() {
+    var elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+    var remaining = Math.max(0, 480 - elapsed);
+    var m = Math.floor(remaining / 60);
+    var s = remaining % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function addEntry(playerName, zoneName) {
+    if (!online) return;
+    var entry = document.createElement('div');
+    entry.className = 'log-entry';
+    entry.innerHTML = '<span class="log-time">' + getTimeStr() + '</span> ' +
+      '<span class="log-arrow">-</span> ' +
+      '<span class="log-player">' + escapeHtml(playerName) + '</span> ' +
+      '<span class="log-arrow">&rarr;</span> ' +
+      '<span class="log-zone">' + zoneName + '</span>';
+    entriesEl.insertBefore(entry, entriesEl.firstChild);
+    // Limit entries
+    while (entriesEl.children.length > maxEntries) {
+      entriesEl.removeChild(entriesEl.lastChild);
+    }
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function setOnline(isOnline) {
+    online = isOnline;
+    if (isOnline) {
+      statusDot.classList.remove('offline');
+      statusText.classList.remove('offline');
+      statusText.textContent = 'ONLINE';
+      offlineOverlay.classList.remove('visible');
+    } else {
+      statusDot.classList.add('offline');
+      statusText.classList.add('offline');
+      statusText.textContent = 'OFFLINE';
+      offlineOverlay.classList.add('visible');
+    }
+  }
+
+  function processPositions(posData) {
+    // posData is a JSON object: {username: {x, y, z}, ...}
+    if (typeof posData !== 'object' || posData === null) return;
+    for (var username in posData) {
+      if (!posData.hasOwnProperty(username)) continue;
+      var p = posData[username];
+      if (!p || typeof p.x !== 'number') continue;
+      var zone = detectZone(p.x, p.z);
+      var prevZone = playerZones[username];
+      if (zone !== prevZone) {
+        playerZones[username] = zone;
+        if (prevZone !== undefined) { // Don't log initial position
+          addEntry(username, zone);
+        }
+      }
+    }
+  }
+
+  // Message handler
+  var lastMsgId = '';
+  var lastMsgTime = 0;
+
+  PortalsSdk.setMessageListener(function(message) {
+    var now = Date.now();
+    var msgId = (typeof message === 'string' ? message.substring(0, 50) : '') + '_' + Math.floor(now / 100);
+    if (msgId === lastMsgId && now - lastMsgTime < 200) return;
+    lastMsgId = msgId;
+    lastMsgTime = now;
+
+    var msg = typeof message === 'string' ? message : JSON.stringify(message);
+
+    // pos_{positionData}
+    if (msg.startsWith('pos_')) {
+      var posStr = msg.substring(4);
+      try {
+        var posData = JSON.parse(posStr);
+        processPositions(posData);
+      } catch(e) {
+        // Position data might come in pipe format, try parsing differently
+      }
+      return;
+    }
+
+    // comms_0 or comms_1
+    if (msg === 'comms_0' || msg === 'comms_down') {
+      setOnline(false);
+      return;
+    }
+    if (msg === 'comms_1' || msg === 'comms_repaired') {
+      setOnline(true);
+      return;
+    }
+
+    // game_start resets timer reference
+    if (msg.startsWith('game_start_')) {
+      gameStartTime = Date.now();
+      entriesEl.innerHTML = '';
+      playerZones = {};
+      setOnline(true);
+      return;
+    }
+
+    // game_reset
+    if (msg === 'game_reset') {
+      entriesEl.innerHTML = '';
+      playerZones = {};
+      return;
+    }
+  });
+})();
+</script>
+</body>
+</html>

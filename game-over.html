@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Star Heist - Game Over</title>
+<script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: transparent; overflow: hidden; font-family: 'Courier New', monospace; }
+
+  .overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .game-over-panel {
+    text-align: center;
+    padding: 40px 60px;
+    border-radius: 16px;
+    min-width: 500px;
+  }
+
+  /* Crew wins - blue/green */
+  .theme-crew {
+    background: rgba(0, 20, 50, 0.95);
+    border: 2px solid rgba(0, 200, 255, 0.5);
+    box-shadow: 0 0 40px rgba(0, 100, 200, 0.3);
+  }
+  .theme-crew .title { color: #00CCFF; }
+  .theme-crew .subtitle { color: #00FF88; }
+
+  /* Saboteur wins - red */
+  .theme-saboteur {
+    background: rgba(40, 0, 0, 0.95);
+    border: 2px solid rgba(255, 0, 0, 0.5);
+    box-shadow: 0 0 40px rgba(200, 0, 0, 0.3);
+  }
+  .theme-saboteur .title { color: #FF4444; }
+  .theme-saboteur .subtitle { color: #FFAA00; }
+
+  /* Meltdown variant - orange/fire */
+  .theme-meltdown {
+    background: rgba(40, 20, 0, 0.95);
+    border: 2px solid rgba(255, 150, 0, 0.6);
+    box-shadow: 0 0 40px rgba(255, 100, 0, 0.3);
+  }
+  .theme-meltdown .title { color: #FF6600; }
+  .theme-meltdown .subtitle { color: #FFAA00; }
+
+  /* Time expired - dark */
+  .theme-time {
+    background: rgba(20, 20, 30, 0.95);
+    border: 2px solid rgba(100, 100, 150, 0.4);
+    box-shadow: 0 0 40px rgba(50, 50, 100, 0.3);
+  }
+  .theme-time .title { color: #8888CC; }
+  .theme-time .subtitle { color: #888; }
+
+  .title {
+    font-size: 36px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    letter-spacing: 3px;
+    animation: fadeIn 1s;
+  }
+
+  .subtitle {
+    font-size: 16px;
+    margin-bottom: 24px;
+    letter-spacing: 1px;
+  }
+
+  .stats {
+    margin: 20px 0;
+    text-align: left;
+    display: inline-block;
+  }
+  .stat-row {
+    padding: 4px 0;
+    font-size: 14px;
+    color: #aaa;
+  }
+  .stat-label { color: #888; }
+  .stat-value { color: #ddd; font-weight: bold; }
+
+  .lobby-btn {
+    margin-top: 24px;
+    padding: 12px 36px;
+    background: rgba(0, 100, 200, 0.6);
+    border: 1px solid rgba(0, 150, 255, 0.5);
+    border-radius: 8px;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    letter-spacing: 2px;
+    transition: all 0.3s;
+  }
+  .lobby-btn:hover { background: rgba(0, 130, 255, 0.8); transform: scale(1.05); }
+
+  @keyframes fadeIn {
+    0% { opacity: 0; transform: scale(0.8); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+</style>
+</head>
+<body>
+
+<div class="overlay">
+  <div class="game-over-panel" id="panel">
+    <div class="title" id="title">GAME OVER</div>
+    <div class="subtitle" id="subtitle"></div>
+    <div class="stats" id="stats"></div>
+    <div>
+      <button class="lobby-btn" onclick="returnToLobby()">RETURN TO LOBBY</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  var winner = params.get('winner') || 'crew';
+  var reason = params.get('reason') || 'tasks';
+
+  var panel = document.getElementById('panel');
+  var titleEl = document.getElementById('title');
+  var subtitleEl = document.getElementById('subtitle');
+  var statsEl = document.getElementById('stats');
+
+  var CONFIGS = {
+    'crew_tasks': {
+      theme: 'theme-crew',
+      title: 'CREW WINS!',
+      subtitle: 'All tasks completed!'
+    },
+    'crew_eject': {
+      theme: 'theme-crew',
+      title: 'CREW WINS!',
+      subtitle: 'All saboteurs ejected!'
+    },
+    'saboteur_elimination': {
+      theme: 'theme-saboteur',
+      title: 'SABOTEURS WIN!',
+      subtitle: 'The crew has fallen.'
+    },
+    'saboteur_meltdown': {
+      theme: 'theme-meltdown',
+      title: 'SABOTEURS WIN!',
+      subtitle: 'Reactor meltdown!'
+    },
+    'saboteur_time': {
+      theme: 'theme-time',
+      title: 'SABOTEURS WIN!',
+      subtitle: 'Time has expired.'
+    }
+  };
+
+  var key = winner + '_' + reason;
+  var config = CONFIGS[key] || CONFIGS['crew_tasks'];
+
+  panel.classList.add(config.theme);
+  titleEl.textContent = config.title;
+  subtitleEl.textContent = config.subtitle;
+
+  // Signal ready for stats
+  setTimeout(function() {
+    PortalsSdk.sendMessageToUnity(JSON.stringify({
+      TaskName: 'GameOverReady',
+      TaskTargetState: 'SetNotActiveToActive'
+    }));
+  }, 500);
+
+  window.returnToLobby = function() {
+    PortalsSdk.sendMessageToUnity(JSON.stringify({
+      TaskName: 'GameReset',
+      TaskTargetState: 'SetNotActiveToActive'
+    }));
+  };
+
+  // Message handler
+  var lastMsgId = '';
+  var lastMsgTime = 0;
+
+  PortalsSdk.setMessageListener(function(message) {
+    var now = Date.now();
+    var msgId = (typeof message === 'string' ? message.substring(0, 50) : '') + '_' + Math.floor(now / 100);
+    if (msgId === lastMsgId && now - lastMsgTime < 200) return;
+    lastMsgId = msgId;
+    lastMsgTime = now;
+
+    var msg = typeof message === 'string' ? message : JSON.stringify(message);
+
+    // stats_elapsed_completed_eliminations_meetings
+    if (msg.startsWith('stats_')) {
+      var parts = msg.split('_');
+      var elapsed = parseFloat(parts[1]) || 0;
+      var completed = parseFloat(parts[2]) || 0;
+      var elims = parseFloat(parts[3]) || 0;
+      var meetings = parseFloat(parts[4]) || 0;
+
+      var timeMin = Math.floor(elapsed / 60);
+      var timeSec = Math.floor(elapsed % 60);
+      var timeStr = timeMin + ':' + (timeSec < 10 ? '0' : '') + timeSec;
+
+      statsEl.innerHTML =
+        '<div class="stat-row"><span class="stat-label">Time elapsed: </span><span class="stat-value">' + timeStr + '</span></div>' +
+        '<div class="stat-row"><span class="stat-label">Tasks completed: </span><span class="stat-value">' + Math.round(completed) + '</span></div>' +
+        '<div class="stat-row"><span class="stat-label">Eliminations: </span><span class="stat-value">' + Math.round(elims) + '</span></div>' +
+        '<div class="stat-row"><span class="stat-label">Meetings called: </span><span class="stat-value">' + Math.round(meetings) + '</span></div>';
+      return;
+    }
+  });
+})();
+</script>
+</body>
+</html>
