@@ -134,6 +134,10 @@
   var meltdownEndMs = 0;
   var meltdownTimeout = null;
   var meltdownTriggered = false;
+  var pendingUnityTasks = [];
+  var sdkFlushInterval = null;
+  var lastMsgId = '';
+  var lastMsgTime = 0;
 
   // ── DOM ──
   var hudEl = document.getElementById('hud');
@@ -176,15 +180,76 @@
     }
   }
 
-  function sendTaskToUnity(taskName) {
-    if (!window.PortalsSdk || typeof PortalsSdk.sendMessageToUnity !== 'function') {
-      console.warn('[HUD] PortalsSdk unavailable, cannot send task:', taskName);
-      return;
+  function canUseSdkSend() {
+    return typeof PortalsSdk !== 'undefined' &&
+      PortalsSdk &&
+      typeof PortalsSdk.sendMessageToUnity === 'function';
+  }
+
+  function canUseParentSend() {
+    return typeof window !== 'undefined' &&
+      window.parent &&
+      typeof window.parent.postMessage === 'function';
+  }
+
+  function canSendToUnity() {
+    return canUseSdkSend() || canUseParentSend();
+  }
+
+  function sendUnityMessage(payload) {
+    if (canUseSdkSend()) {
+      PortalsSdk.sendMessageToUnity(payload);
+      return true;
     }
-    PortalsSdk.sendMessageToUnity(JSON.stringify({
+    if (canUseParentSend()) {
+      window.parent.postMessage({
+        type: 'generic',
+        message: payload
+      }, '*');
+      console.log('[HUD] Sent task via parent.postMessage');
+      return true;
+    }
+    return false;
+  }
+
+  function ensureSdkFlushLoop() {
+    if (sdkFlushInterval) return;
+    sdkFlushInterval = setInterval(function() {
+      if (!pendingUnityTasks.length) return;
+      flushPendingUnityTasks();
+      if (!pendingUnityTasks.length) {
+        clearInterval(sdkFlushInterval);
+        sdkFlushInterval = null;
+      }
+    }, 250);
+  }
+
+  function flushPendingUnityTasks() {
+    if (!canSendToUnity()) return;
+    while (pendingUnityTasks.length) {
+      var taskName = pendingUnityTasks.shift();
+      sendUnityMessage(JSON.stringify({
+        TaskName: taskName,
+        TaskTargetState: 'SetNotActiveToActive'
+      }));
+      console.log('[HUD] Sent queued task:', taskName);
+    }
+  }
+
+  function sendTaskToUnity(taskName) {
+    var payload = JSON.stringify({
       TaskName: taskName,
       TaskTargetState: 'SetNotActiveToActive'
-    }));
+    });
+    if (!sendUnityMessage(payload)) {
+      if (pendingUnityTasks.indexOf(taskName) === -1) {
+        pendingUnityTasks.push(taskName);
+      }
+      ensureSdkFlushLoop();
+      console.warn('[HUD] PortalsSdk unavailable, queueing task:', taskName);
+      return;
+    }
+    console.log('[HUD] Sent task:', taskName);
   }
 
   function ensureTimerLoop() {
@@ -337,8 +402,15 @@
     }, duration);
   }
 
-  // ── Message Handler ──
-  PortalsSdk.setMessageListener(function(message) {
+  function handleMessage(message) {
+    flushPendingUnityTasks();
+
+    var now = Date.now();
+    var messageKey = (typeof message === 'string' ? message : JSON.stringify(message)) + '_' + Math.floor(now / 100);
+    if (messageKey === lastMsgId && now - lastMsgTime < 200) return;
+    lastMsgId = messageKey;
+    lastMsgTime = now;
+
     console.log('[HUD] Received:', message);
 
     var msg = message;
@@ -494,7 +566,29 @@
       showNotification('WARNING: ' + zone + ' LETHAL ZONE!', 3000);
       return;
     }
+  }
+
+  function setupMessageListener() {
+    if (typeof PortalsSdk !== 'undefined' && PortalsSdk && typeof PortalsSdk.setMessageListener === 'function') {
+      PortalsSdk.setMessageListener(function(message) {
+        handleMessage(message);
+      });
+      console.log('[HUD] SDK listener registered');
+      flushPendingUnityTasks();
+    } else {
+      console.log('[HUD] Waiting for SDK...');
+      setTimeout(setupMessageListener, 250);
+    }
+  }
+
+  window.addEventListener('message', function(event) {
+    if (typeof event.data === 'string') handleMessage(event.data);
+    else if (event.data && event.data.portalsMessage) handleMessage(event.data.portalsMessage);
+    else if (event.data && event.data.message && typeof event.data.message === 'string') handleMessage(event.data.message);
   });
+
+  // ── Message Handler ──
+  setupMessageListener();
 
   // ── Signal ready ──
   setTimeout(function() {
@@ -503,6 +597,7 @@
 
   document.addEventListener('visibilitychange', function() {
     if (!document.hidden) {
+      flushPendingUnityTasks();
       syncLobbyCountdown();
       syncMeltdownCountdown();
       syncTimerFromClock();
@@ -513,6 +608,7 @@
   });
 
   window.addEventListener('focus', function() {
+    flushPendingUnityTasks();
     syncLobbyCountdown();
     syncMeltdownCountdown();
     syncTimerFromClock();
