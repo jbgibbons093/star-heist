@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Star Heist Lobby</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -13,155 +14,230 @@
     background: transparent !important;
     overflow: visible;
     pointer-events: none;
+    font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+    color: #e0e8ff;
   }
-  body {
-    font-family: Georgia, "Times New Roman", serif;
-    background: transparent !important;
-    color: #f7f2df;
-  }
+
   .panel {
     position: fixed;
-    right: 10px;
-    bottom: 10px;
-    width: min(320px, calc(100vw - 20px));
-    max-height: calc(100vh - 20px);
+    right: 16px;
+    bottom: 16px;
+    width: min(340px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
     overflow: auto;
-    padding: 14px;
-    background: linear-gradient(180deg, rgba(6, 16, 26, 0.96), rgba(8, 10, 18, 0.94));
-    border: 1px solid rgba(94, 195, 255, 0.35);
-    border-radius: 14px;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.42);
-    backdrop-filter: blur(10px);
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(10, 15, 40, 0.94), rgba(15, 20, 50, 0.90));
+    border: 1px solid rgba(79, 195, 247, 0.2);
+    border-radius: 16px;
+    box-shadow:
+      0 8px 40px rgba(0, 0, 0, 0.5),
+      0 0 1px rgba(79, 195, 247, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     pointer-events: auto;
+    animation: panelIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #4FC3F7, transparent);
+    border-radius: 16px 16px 0 0;
+  }
+
+  @keyframes panelIn {
+    from { opacity: 0; transform: translateY(12px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
   .eyebrow {
-    font-size: 11px;
-    letter-spacing: 0.28em;
+    font-size: 10px;
+    letter-spacing: 3px;
     text-transform: uppercase;
-    color: #71d4ff;
-    margin-bottom: 8px;
+    color: rgba(79, 195, 247, 0.6);
+    font-weight: 600;
+    margin-bottom: 6px;
   }
+
   h1 {
-    font-size: 22px;
-    line-height: 1;
-    margin-bottom: 8px;
+    font-size: 20px;
+    font-weight: 800;
+    color: #4FC3F7;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
   }
+
   .subtitle {
-    color: rgba(247, 242, 223, 0.72);
+    color: rgba(200, 210, 240, 0.5);
     font-size: 12px;
-    line-height: 1.35;
-    margin-bottom: 14px;
+    font-weight: 400;
+    line-height: 1.4;
+    margin-bottom: 16px;
   }
+
   .stats {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
   }
   .stat {
-    padding: 10px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
   }
   .stat-label {
     font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.22em;
-    color: rgba(247, 242, 223, 0.56);
-    margin-bottom: 6px;
+    letter-spacing: 2px;
+    color: rgba(160, 180, 220, 0.5);
+    font-weight: 600;
+    margin-bottom: 4px;
   }
   .stat-value {
     font-size: 22px;
-    font-weight: bold;
+    font-weight: 800;
+    color: #e0e8ff;
   }
+  .stat-value.highlight { color: #4FC3F7; }
+  .stat-value.launching { color: #FFD54F; }
+  .stat-value.live { color: #66BB6A; }
+
   .roster {
-    margin-bottom: 12px;
+    margin-bottom: 14px;
   }
   .roster-label {
-    font-size: 12px;
-    letter-spacing: 0.16em;
+    font-size: 11px;
+    letter-spacing: 2px;
     text-transform: uppercase;
-    color: rgba(247, 242, 223, 0.56);
+    color: rgba(160, 180, 220, 0.5);
+    font-weight: 600;
     margin-bottom: 8px;
   }
   .roster-list {
-    display: grid;
-    gap: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 200px;
+    overflow-y: auto;
   }
+  .roster-list::-webkit-scrollbar { width: 3px; }
+  .roster-list::-webkit-scrollbar-track { background: transparent; }
+  .roster-list::-webkit-scrollbar-thumb { background: rgba(79, 195, 247, 0.2); border-radius: 2px; }
+
   .roster-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 10px;
-    border-radius: 9px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
   }
   .roster-row.self {
-    border-color: rgba(113, 212, 255, 0.55);
-    background: rgba(27, 89, 119, 0.28);
+    border-color: rgba(79, 195, 247, 0.3);
+    background: rgba(79, 195, 247, 0.08);
   }
   .roster-name {
     font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .roster-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #66BB6A;
+    box-shadow: 0 0 6px rgba(102, 187, 106, 0.4);
   }
   .roster-tag {
-    font-size: 9px;
-    letter-spacing: 0.18em;
+    font-size: 10px;
+    letter-spacing: 1.5px;
     text-transform: uppercase;
-    color: rgba(247, 242, 223, 0.5);
+    color: rgba(160, 180, 220, 0.4);
+    font-weight: 600;
   }
+  .roster-tag.you { color: rgba(79, 195, 247, 0.7); }
+
   .empty {
-    padding: 14px 10px;
+    padding: 20px 10px;
     text-align: center;
-    color: rgba(247, 242, 223, 0.54);
-    border: 1px dashed rgba(255, 255, 255, 0.16);
+    color: rgba(160, 180, 220, 0.3);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    border: 1px dashed rgba(255, 255, 255, 0.08);
     border-radius: 10px;
   }
+
   .status {
     min-height: 18px;
-    margin-bottom: 10px;
-    color: #f6c867;
+    margin-bottom: 12px;
+    color: #FFD54F;
     font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
   }
+
   .actions {
     display: flex;
     gap: 8px;
   }
   button {
-    border: 0;
-    border-radius: 999px;
-    padding: 10px 14px;
-    font: inherit;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
     cursor: pointer;
     font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    transition: all 0.25s ease;
   }
   .primary {
     flex: 1;
-    background: linear-gradient(135deg, #7af6cb, #38a4f0);
-    color: #04111c;
-    font-weight: bold;
+    background: rgba(79, 195, 247, 0.15);
+    border: 1px solid rgba(79, 195, 247, 0.3);
+    color: #4FC3F7;
+  }
+  .primary:hover:not(:disabled) {
+    background: rgba(79, 195, 247, 0.25);
+    border-color: rgba(79, 195, 247, 0.5);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 195, 247, 0.15);
   }
   .secondary {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(200, 210, 240, 0.6);
+  }
+  .secondary:hover {
     background: rgba(255, 255, 255, 0.08);
-    color: #f7f2df;
+    border-color: rgba(255, 255, 255, 0.15);
   }
   button:disabled {
     cursor: default;
-    opacity: 0.55;
+    opacity: 0.4;
   }
 </style>
 </head>
 <body>
 <div class="panel" id="panel">
-  <div class="eyebrow">Chrono Dock</div>
-  <h1>Lobby Sync</h1>
-  <div class="subtitle">See who is in the room, coordinate in voice, then launch the round from here.</div>
+  <div class="eyebrow">Star Heist</div>
+  <h1>Mission Briefing</h1>
+  <div class="subtitle">Sync up with your crew, then launch the mission.</div>
 
   <div class="stats">
     <div class="stat">
-      <div class="stat-label">Crew Present</div>
-      <div class="stat-value" id="player-count">0</div>
+      <div class="stat-label">Crew</div>
+      <div class="stat-value highlight" id="player-count">0</div>
     </div>
     <div class="stat">
       <div class="stat-label">Status</div>
@@ -172,14 +248,14 @@
   <div class="roster">
     <div class="roster-label">Roster</div>
     <div class="roster-list" id="roster-list">
-      <div class="empty">Waiting for player sync...</div>
+      <div class="empty">Awaiting crew sync...</div>
     </div>
   </div>
 
-  <div class="status" id="status">Walk the ship, then start when everyone is ready.</div>
+  <div class="status" id="status">Explore the ship, then start when ready.</div>
 
   <div class="actions">
-    <button class="primary" id="start-btn">Start Match</button>
+    <button class="primary" id="start-btn">Launch</button>
     <button class="secondary" id="close-btn">Close</button>
   </div>
 </div>
@@ -249,13 +325,18 @@
     var names = sortedNames();
     playerCountEl.textContent = String(names.length);
     if (!names.length) {
-      rosterListEl.innerHTML = '<div class="empty">Waiting for player sync...</div>';
+      rosterListEl.innerHTML = '<div class="empty">Awaiting crew sync...</div>';
       return;
     }
     rosterListEl.innerHTML = names.map(function(name) {
-      var rowClass = name === selfName ? 'roster-row self' : 'roster-row';
-      var tag = name === selfName ? 'you' : 'crew';
-      return '<div class="' + rowClass + '"><div class="roster-name">' + escapeHtml(name) + '</div><div class="roster-tag">' + tag + '</div></div>';
+      var isSelf = name === selfName;
+      var rowClass = isSelf ? 'roster-row self' : 'roster-row';
+      var tagClass = isSelf ? 'roster-tag you' : 'roster-tag';
+      var tag = isSelf ? 'you' : 'crew';
+      return '<div class="' + rowClass + '">' +
+        '<div class="roster-name"><span class="roster-dot"></span>' + escapeHtml(name) + '</div>' +
+        '<div class="' + tagClass + '">' + tag + '</div>' +
+        '</div>';
     }).join('');
   }
 
@@ -272,12 +353,14 @@
     gamePhase = parseInt(phase, 10) || 0;
     if (gamePhase === 0) {
       lobbyStateEl.textContent = countdownEndMs > 0 ? 'Launching' : 'Idle';
+      lobbyStateEl.className = countdownEndMs > 0 ? 'stat-value launching' : 'stat-value';
       startBtn.disabled = countdownEndMs > 0;
       return;
     }
     lobbyStateEl.textContent = 'Live';
+    lobbyStateEl.className = 'stat-value live';
     startBtn.disabled = true;
-    setStatus('Match already in progress.');
+    setStatus('Mission already in progress.');
     closeOverlay();
   }
 
@@ -289,6 +372,7 @@
     }
     if (gamePhase === 0) {
       lobbyStateEl.textContent = 'Idle';
+      lobbyStateEl.className = 'stat-value';
       startBtn.disabled = false;
     }
   }
@@ -297,11 +381,12 @@
     if (!countdownEndMs) return;
     var remaining = Math.max(0, Math.ceil((countdownEndMs - Date.now()) / 1000));
     lobbyStateEl.textContent = 'Launching';
+    lobbyStateEl.className = 'stat-value launching';
     startBtn.disabled = true;
-    setStatus('Match begins in ' + remaining + '...');
+    setStatus('Mission begins in ' + remaining + '...');
     if (remaining <= 0) {
       clearCountdown();
-      setStatus('Match launch handed off to HUD.');
+      setStatus('Mission launched.');
     }
   }
 
@@ -346,7 +431,7 @@
     }
 
     if (msg.indexOf('game_start_') === 0) {
-      setStatus('Match launched.');
+      setStatus('Mission launched.');
       closeOverlay();
       return;
     }
@@ -354,7 +439,7 @@
     if (msg === 'game_reset') {
       clearCountdown();
       setLobbyState(0);
-      setStatus('Round reset. Sync up and launch again.');
+      setStatus('Round reset. Regroup and launch again.');
     }
   }
 
@@ -382,9 +467,9 @@
     if (startBtn.disabled) return;
     if (sendTask('BeginLobbyCountdown')) {
       startBtn.disabled = true;
-      setStatus('Requesting launch countdown...');
+      setStatus('Requesting launch sequence...');
     } else {
-      setStatus('Portals link unavailable. Try reopening the overlay.');
+      setStatus('Portals link unavailable. Try reopening.');
     }
     setTimeout(focusGameKeyboard, 50);
   });
@@ -395,16 +480,12 @@
   });
 
   document.addEventListener('click', function(event) {
-    if (event.target.closest && event.target.closest('button')) {
-      return;
-    }
+    if (event.target.closest && event.target.closest('button')) return;
     focusGameKeyboard();
   });
 
   document.addEventListener('mouseup', function(event) {
-    if (event.target.closest && event.target.closest('button')) {
-      return;
-    }
+    if (event.target.closest && event.target.closest('button')) return;
     setTimeout(focusGameKeyboard, 50);
   });
 

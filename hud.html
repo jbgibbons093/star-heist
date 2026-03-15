@@ -633,6 +633,21 @@
       showNotification('WARNING: ' + zone + ' LETHAL ZONE!', 3000, 'danger');
       return;
     }
+
+    // Generic HUD notification: hud_variant_text
+    // variant: info, success, danger
+    if (msgStr.startsWith('hud_')) {
+      var firstUs = msgStr.indexOf('_');
+      var secondUs = msgStr.indexOf('_', firstUs + 1);
+      if (secondUs > firstUs) {
+        var variant = msgStr.substring(firstUs + 1, secondUs);
+        var text = msgStr.substring(secondUs + 1);
+        var dur = variant === 'danger' ? 5000 : 3000;
+        var v = (variant === 'success' || variant === 'danger') ? variant : undefined;
+        showNotification(text, dur, v);
+      }
+      return;
+    }
   }
 
   function setupMessageListener() {
