@@ -265,7 +265,7 @@
   function sendComplete() {
     if (typeof PortalsSdk !== 'undefined' && PortalsSdk && typeof PortalsSdk.sendMessageToUnity === 'function') {
       PortalsSdk.sendMessageToUnity(JSON.stringify({
-        TaskName: 'Engine_Complete',
+        TaskName: 'Engine_Calibrate_Complete',
         TaskTargetState: 'SetNotActiveToActive'
       }));
     }
