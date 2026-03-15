@@ -551,6 +551,12 @@
       return;
     }
 
+    if (msgStr === 'task_done') {
+      tasksCompleted++;
+      updateTaskBar();
+      return;
+    }
+
     if (msgStr.startsWith('task_')) {
       var parts = msgStr.split('_');
       tasksCompleted = parseFloat(parts[1]) || 0;
