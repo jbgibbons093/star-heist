@@ -7,19 +7,28 @@
 <script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%;
+    height: 100%;
+  }
   body {
     font-family: Georgia, "Times New Roman", serif;
     background: transparent;
     color: #f7f2df;
+    overflow: hidden;
   }
   .panel {
-    width: min(420px, calc(100vw - 24px));
-    margin: 18px auto 0;
-    padding: 18px;
+    position: fixed;
+    right: 10px;
+    bottom: 10px;
+    width: min(320px, calc(100vw - 20px));
+    max-height: calc(100vh - 20px);
+    overflow: auto;
+    padding: 14px;
     background: linear-gradient(180deg, rgba(6, 16, 26, 0.96), rgba(8, 10, 18, 0.94));
     border: 1px solid rgba(94, 195, 255, 0.35);
-    border-radius: 16px;
-    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+    border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.42);
     backdrop-filter: blur(10px);
   }
   .eyebrow {
@@ -27,27 +36,28 @@
     letter-spacing: 0.28em;
     text-transform: uppercase;
     color: #71d4ff;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
   h1 {
-    font-size: 28px;
+    font-size: 22px;
     line-height: 1;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
   .subtitle {
     color: rgba(247, 242, 223, 0.72);
-    font-size: 14px;
-    margin-bottom: 18px;
+    font-size: 12px;
+    line-height: 1.35;
+    margin-bottom: 14px;
   }
   .stats {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-    margin-bottom: 16px;
+    gap: 8px;
+    margin-bottom: 12px;
   }
   .stat {
-    padding: 12px;
-    border-radius: 12px;
+    padding: 10px;
+    border-radius: 10px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
@@ -56,32 +66,32 @@
     text-transform: uppercase;
     letter-spacing: 0.22em;
     color: rgba(247, 242, 223, 0.56);
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
   .stat-value {
-    font-size: 26px;
+    font-size: 22px;
     font-weight: bold;
   }
   .roster {
-    margin-bottom: 16px;
+    margin-bottom: 12px;
   }
   .roster-label {
     font-size: 12px;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: rgba(247, 242, 223, 0.56);
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
   .roster-list {
     display: grid;
-    gap: 8px;
+    gap: 6px;
   }
   .roster-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 12px;
-    border-radius: 10px;
+    padding: 8px 10px;
+    border-radius: 9px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.07);
   }
@@ -90,37 +100,38 @@
     background: rgba(27, 89, 119, 0.28);
   }
   .roster-name {
-    font-size: 15px;
+    font-size: 13px;
   }
   .roster-tag {
-    font-size: 10px;
+    font-size: 9px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: rgba(247, 242, 223, 0.5);
   }
   .empty {
-    padding: 18px 12px;
+    padding: 14px 10px;
     text-align: center;
     color: rgba(247, 242, 223, 0.54);
     border: 1px dashed rgba(255, 255, 255, 0.16);
     border-radius: 10px;
   }
   .status {
-    min-height: 22px;
-    margin-bottom: 14px;
+    min-height: 18px;
+    margin-bottom: 10px;
     color: #f6c867;
-    font-size: 14px;
+    font-size: 12px;
   }
   .actions {
     display: flex;
-    gap: 10px;
+    gap: 8px;
   }
   button {
     border: 0;
     border-radius: 999px;
-    padding: 12px 16px;
+    padding: 10px 14px;
     font: inherit;
     cursor: pointer;
+    font-size: 13px;
   }
   .primary {
     flex: 1;
