@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reactor Stabilize</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: transparent;
+    overflow: hidden;
+    font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+  }
+
+  .overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .panel {
+    background: linear-gradient(160deg, rgba(12, 18, 45, 0.97), rgba(8, 12, 35, 0.97));
+    border: 1px solid rgba(80, 140, 255, 0.15);
+    border-radius: 20px;
+    padding: 24px 32px 28px;
+    width: 380px;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 8px 40px rgba(0, 0, 0, 0.6),
+      0 0 1px rgba(100, 160, 255, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #AB47BC, transparent);
+  }
+
+  .eyebrow {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: #AB47BC;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  h1 {
+    color: #e0e8ff;
+    font-size: 20px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .desc {
+    color: rgba(180, 195, 230, 0.6);
+    font-size: 12px;
+    margin-bottom: 20px;
+  }
+
+  .reactor-ring {
+    width: 200px;
+    height: 200px;
+    margin: 0 auto 16px;
+    position: relative;
+  }
+
+  canvas {
+    width: 100%;
+    height: 100%;
+  }
+
+  .hold-btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(171, 71, 188, 0.3);
+    background: rgba(171, 71, 188, 0.1);
+    color: rgba(180, 195, 230, 0.7);
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  .hold-btn:hover {
+    background: rgba(171, 71, 188, 0.18);
+    border-color: rgba(171, 71, 188, 0.5);
+  }
+  .hold-btn.holding {
+    background: rgba(171, 71, 188, 0.3);
+    border-color: rgba(171, 71, 188, 0.6);
+    color: #CE93D8;
+    box-shadow: 0 0 20px rgba(171, 71, 188, 0.2);
+  }
+  .hold-btn.done {
+    background: rgba(102, 187, 106, 0.2);
+    border-color: rgba(102, 187, 106, 0.4);
+    color: #66BB6A;
+    cursor: default;
+  }
+
+  .status {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(180, 195, 230, 0.5);
+    margin-top: 12px;
+    min-height: 20px;
+    transition: color 0.3s;
+  }
+  .status.done { color: #66BB6A; font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+  .status.warn { color: #FFD54F; }
+
+  .close-btn {
+    position: absolute;
+    top: 14px; right: 16px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: rgba(180, 195, 230, 0.5);
+    font-family: 'Outfit', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 12px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: all 0.2s;
+  }
+  .close-btn:hover { background: rgba(255, 255, 255, 0.1); color: #e0e8ff; }
+</style>
+</head>
+<body>
+
+<div class="overlay">
+  <div class="panel">
+    <button class="close-btn" onclick="closeTask()">CLOSE</button>
+    <div class="eyebrow">Reactor Core</div>
+    <h1>Stabilize Reactor</h1>
+    <div class="desc">Hold the button steady until the core is fully stabilized.</div>
+
+    <div class="reactor-ring">
+      <canvas id="ring" width="400" height="400"></canvas>
+    </div>
+    <button class="hold-btn" id="holdBtn">Hold to Stabilize</button>
+    <div class="status" id="status">Press and hold the button</div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var canvas = document.getElementById('ring');
+  var ctx = canvas.getContext('2d');
+  var btn = document.getElementById('holdBtn');
+  var statusEl = document.getElementById('status');
+
+  var REQUIRED = 3.0;
+  var progress = 0;
+  var holding = false;
+  var completed = false;
+  var lastTime = 0;
+  var wobble = 0;
+
+  function draw() {
+    var w = canvas.width;
+    var h = canvas.height;
+    var cx = w / 2;
+    var cy = h / 2;
+    var r = w * 0.38;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Background ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(80, 140, 255, 0.08)';
+    ctx.lineWidth = 14;
+    ctx.stroke();
+
+    // Progress arc
+    var pct = Math.min(progress / REQUIRED, 1);
+    if (pct > 0) {
+      var startAngle = -Math.PI / 2;
+      var endAngle = startAngle + pct * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, startAngle, endAngle);
+      var grad = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+      if (completed) {
+        grad.addColorStop(0, '#66BB6A');
+        grad.addColorStop(1, '#43A047');
+      } else {
+        grad.addColorStop(0, '#CE93D8');
+        grad.addColorStop(1, '#AB47BC');
+      }
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 14;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+
+    // Center percentage
+    ctx.fillStyle = completed ? '#66BB6A' : (holding ? '#CE93D8' : 'rgba(180, 195, 230, 0.4)');
+    ctx.font = '800 ' + (w * 0.14) + 'px Outfit, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(Math.round(pct * 100) + '%', cx, cy);
+
+    // Wobble particles when holding
+    if (holding && !completed) {
+      wobble += 0.15;
+      for (var i = 0; i < 6; i++) {
+        var angle = (Math.PI * 2 / 6) * i + wobble;
+        var px = cx + Math.cos(angle) * (r + 16 + Math.sin(wobble * 2 + i) * 4);
+        var py = cy + Math.sin(angle) * (r + 16 + Math.sin(wobble * 2 + i) * 4);
+        ctx.beginPath();
+        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(206, 147, 216, ' + (0.3 + Math.sin(wobble + i) * 0.2) + ')';
+        ctx.fill();
+      }
+    }
+  }
+
+  function tick(timestamp) {
+    if (!lastTime) lastTime = timestamp;
+    var dt = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+
+    if (!completed) {
+      if (holding) {
+        progress = Math.min(progress + dt, REQUIRED);
+        if (progress >= REQUIRED) {
+          completed = true;
+          btn.textContent = 'STABILIZED';
+          btn.classList.remove('holding');
+          btn.classList.add('done');
+          statusEl.textContent = 'REACTOR STABLE';
+          statusEl.className = 'status done';
+          sendComplete();
+        } else {
+          var pct = Math.round((progress / REQUIRED) * 100);
+          statusEl.textContent = 'Stabilizing... ' + pct + '%';
+          statusEl.className = 'status warn';
+        }
+      } else if (progress > 0) {
+        progress = Math.max(0, progress - dt * 0.6);
+        if (progress <= 0) {
+          statusEl.textContent = 'Press and hold the button';
+          statusEl.className = 'status';
+        } else {
+          statusEl.textContent = 'Losing stability! Hold the button!';
+          statusEl.className = 'status warn';
+        }
+      }
+    }
+
+    draw();
+    requestAnimationFrame(tick);
+  }
+
+  function startHold(e) {
+    if (completed) return;
+    e.preventDefault();
+    holding = true;
+    btn.classList.add('holding');
+    btn.textContent = 'Holding...';
+  }
+
+  function endHold(e) {
+    if (completed) return;
+    e.preventDefault();
+    holding = false;
+    btn.classList.remove('holding');
+    btn.textContent = 'Hold to Stabilize';
+  }
+
+  btn.addEventListener('pointerdown', startHold);
+  btn.addEventListener('pointerup', endHold);
+  btn.addEventListener('pointerleave', endHold);
+  btn.addEventListener('pointercancel', endHold);
+
+  function sendComplete() {
+    if (typeof PortalsSdk !== 'undefined' && PortalsSdk && typeof PortalsSdk.sendMessageToUnity === 'function') {
+      PortalsSdk.sendMessageToUnity(JSON.stringify({
+        TaskName: 'Reactor_Meltdown_Repair',
+        TaskTargetState: 'SetNotActiveToActive'
+      }));
+    }
+    setTimeout(closeTask, 800);
+  }
+
+  window.closeTask = function() {
+    if (typeof PortalsSdk !== 'undefined' && PortalsSdk && typeof PortalsSdk.closeIframe === 'function') {
+      PortalsSdk.closeIframe();
+    }
+  };
+
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

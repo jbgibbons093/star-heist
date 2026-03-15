@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comms Repair</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: transparent;
+    overflow: hidden;
+    font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+  }
+
+  .overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .panel {
+    background: linear-gradient(160deg, rgba(12, 18, 45, 0.97), rgba(8, 12, 35, 0.97));
+    border: 1px solid rgba(80, 140, 255, 0.15);
+    border-radius: 20px;
+    padding: 24px 32px 28px;
+    width: 400px;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 8px 40px rgba(0, 0, 0, 0.6),
+      0 0 1px rgba(100, 160, 255, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #FFD54F, transparent);
+  }
+
+  .eyebrow {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: #FFD54F;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  h1 {
+    color: #e0e8ff;
+    font-size: 20px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .desc {
+    color: rgba(180, 195, 230, 0.6);
+    font-size: 12px;
+    margin-bottom: 20px;
+  }
+
+  .wire-board {
+    position: relative;
+    height: 220px;
+    margin-bottom: 16px;
+  }
+
+  canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .wire-col {
+    position: absolute;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    height: 100%;
+    z-index: 2;
+  }
+  .wire-col.left { left: 0; }
+  .wire-col.right { right: 0; }
+
+  .wire-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    z-index: 3;
+  }
+  .wire-dot:hover {
+    transform: scale(1.15);
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+  .wire-dot.connected {
+    border-color: rgba(102, 187, 106, 0.6);
+    box-shadow: 0 0 10px rgba(102, 187, 106, 0.3);
+  }
+
+  .status {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(180, 195, 230, 0.5);
+    min-height: 20px;
+    transition: color 0.3s;
+  }
+  .status.done { color: #66BB6A; font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+
+  .close-btn {
+    position: absolute;
+    top: 14px; right: 16px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: rgba(180, 195, 230, 0.5);
+    font-family: 'Outfit', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 12px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: all 0.2s;
+  }
+  .close-btn:hover { background: rgba(255, 255, 255, 0.1); color: #e0e8ff; }
+</style>
+</head>
+<body>
+
+<div class="overlay">
+  <div class="panel">
+    <button class="close-btn" onclick="closeTask()">CLOSE</button>
+    <div class="eyebrow">Communications</div>
+    <h1>Wire Reconnect</h1>
+    <div class="desc">Connect matching colors from left to right.</div>
+
+    <div class="wire-board" id="board">
+      <div class="wire-col left" id="left-col"></div>
+      <div class="wire-col right" id="right-col"></div>
+      <canvas id="canvas"></canvas>
+    </div>
+    <div class="status" id="status">Click a left dot, then its match on the right</div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var COLORS = ['#EF5350', '#4FC3F7', '#FFD54F', '#66BB6A'];
+  var leftCol = document.getElementById('left-col');
+  var rightCol = document.getElementById('right-col');
+  var canvas = document.getElementById('canvas');
+  var ctx = canvas.getContext('2d');
+  var board = document.getElementById('board');
+  var statusEl = document.getElementById('status');
+
+  var rightOrder = [0, 1, 2, 3];
+  for (var i = rightOrder.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = rightOrder[i]; rightOrder[i] = rightOrder[j]; rightOrder[j] = t;
+  }
+
+  var connections = [];
+  var selectedLeft = -1;
+  var completed = false;
+  var leftDots = [];
+  var rightDots = [];
+
+  function buildDots() {
+    for (var i = 0; i < 4; i++) {
+      var ld = document.createElement('div');
+      ld.className = 'wire-dot';
+      ld.style.background = COLORS[i];
+      ld.dataset.side = 'left';
+      ld.dataset.color = i;
+      ld.addEventListener('click', onDotClick);
+      leftCol.appendChild(ld);
+      leftDots.push(ld);
+
+      var rd = document.createElement('div');
+      rd.className = 'wire-dot';
+      rd.style.background = COLORS[rightOrder[i]];
+      rd.dataset.side = 'right';
+      rd.dataset.color = rightOrder[i];
+      rd.addEventListener('click', onDotClick);
+      rightCol.appendChild(rd);
+      rightDots.push(rd);
+    }
+  }
+
+  function resizeCanvas() {
+    var rect = board.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+  }
+
+  function drawLines() {
+    resizeCanvas();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+
+    var boardRect = board.getBoundingClientRect();
+
+    connections.forEach(function(conn) {
+      var lRect = leftDots[conn.leftIdx].getBoundingClientRect();
+      var rIdx = -1;
+      for (var i = 0; i < 4; i++) {
+        if (parseInt(rightDots[i].dataset.color) === conn.colorIdx) { rIdx = i; break; }
+      }
+      if (rIdx < 0) return;
+      var rRect = rightDots[rIdx].getBoundingClientRect();
+
+      var x1 = lRect.left + lRect.width / 2 - boardRect.left;
+      var y1 = lRect.top + lRect.height / 2 - boardRect.top;
+      var x2 = rRect.left + rRect.width / 2 - boardRect.left;
+      var y2 = rRect.top + rRect.height / 2 - boardRect.top;
+
+      ctx.strokeStyle = COLORS[conn.colorIdx];
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.bezierCurveTo(x1 + 80, y1, x2 - 80, y2, x2, y2);
+      ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  function isLeftConnected(idx) {
+    for (var i = 0; i < connections.length; i++) {
+      if (connections[i].leftIdx === idx) return true;
+    }
+    return false;
+  }
+
+  function isRightColorConnected(colorIdx) {
+    for (var i = 0; i < connections.length; i++) {
+      if (connections[i].colorIdx === colorIdx) return true;
+    }
+    return false;
+  }
+
+  function onDotClick(e) {
+    if (completed) return;
+    var dot = e.currentTarget;
+    var side = dot.dataset.side;
+    var colorIdx = parseInt(dot.dataset.color);
+
+    if (side === 'left') {
+      if (isLeftConnected(colorIdx)) return;
+      selectedLeft = colorIdx;
+      leftDots.forEach(function(d) { d.style.transform = ''; d.style.borderColor = 'rgba(255,255,255,0.15)'; });
+      dot.style.transform = 'scale(1.2)';
+      dot.style.borderColor = 'rgba(255,255,255,0.6)';
+      statusEl.textContent = 'Now click the matching color on the right';
+      return;
+    }
+
+    if (side === 'right' && selectedLeft >= 0) {
+      if (isRightColorConnected(colorIdx)) return;
+      if (colorIdx === selectedLeft) {
+        connections.push({ leftIdx: selectedLeft, colorIdx: colorIdx });
+        leftDots[selectedLeft].classList.add('connected');
+        dot.classList.add('connected');
+        leftDots.forEach(function(d) { d.style.transform = ''; d.style.borderColor = ''; });
+        selectedLeft = -1;
+        drawLines();
+
+        if (connections.length === 4) {
+          completed = true;
+          statusEl.textContent = 'COMMS RESTORED';
+          statusEl.className = 'status done';
+          sendComplete();
+        } else {
+          statusEl.textContent = connections.length + '/4 connected';
+        }
+      } else {
+        statusEl.textContent = 'Wrong match — colors must match';
+        selectedLeft = -1;
+        leftDots.forEach(function(d) { d.style.transform = ''; d.style.borderColor = ''; });
+      }
+    }
+  }
+
+  function sendComplete() {
+    if (typeof PortalsSdk !== 'undefined' && PortalsSdk && typeof PortalsSdk.sendMessageToUnity === 'function') {
+      PortalsSdk.sendMessageToUnity(JSON.stringify({
+        TaskName: 'Comms_Repair_Timer',
+        TaskTargetState: 'SetNotActiveToActive'
+      }));
+    }
+    setTimeout(closeTask, 800);
+  }
+
+  window.closeTask = function() {
+    if (typeof PortalsSdk !== 'undefined' && PortalsSdk && typeof PortalsSdk.closeIframe === 'function') {
+      PortalsSdk.closeIframe();
+    }
+  };
+
+  buildDots();
+  setTimeout(drawLines, 50);
+  window.addEventListener('resize', drawLines);
+})();
+</script>
+</body>
+</html>

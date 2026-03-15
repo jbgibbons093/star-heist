@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Repair Lights</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: transparent;
+    overflow: hidden;
+    font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+  }
+
+  .overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .panel {
+    background: linear-gradient(160deg, rgba(12, 18, 45, 0.97), rgba(8, 12, 35, 0.97));
+    border: 1px solid rgba(80, 140, 255, 0.15);
+    border-radius: 20px;
+    padding: 24px 32px 28px;
+    width: 380px;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 8px 40px rgba(0, 0, 0, 0.6),
+      0 0 1px rgba(100, 160, 255, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #FF7043, transparent);
+  }
+
+  .eyebrow {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: #FF7043;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  h1 {
+    color: #e0e8ff;
+    font-size: 20px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .desc {
+    color: rgba(180, 195, 230, 0.6);
+    font-size: 12px;
+    margin-bottom: 20px;
+  }
+
+  .breaker-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .breaker {
+    aspect-ratio: 0.7;
+    border-radius: 12px;
+    border: 1px solid rgba(80, 140, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .breaker:hover:not(.locked) {
+    background: rgba(80, 140, 255, 0.08);
+    border-color: rgba(80, 140, 255, 0.2);
+  }
+  .breaker.on {
+    background: rgba(102, 187, 106, 0.15);
+    border-color: rgba(102, 187, 106, 0.4);
+  }
+  .breaker.wrong {
+    background: rgba(239, 83, 80, 0.15);
+    border-color: rgba(239, 83, 80, 0.4);
+    animation: shake 0.3s ease;
+  }
+  .breaker.locked { cursor: default; }
+  .breaker.next-hint {
+    border-color: rgba(255, 213, 79, 0.3);
+    box-shadow: 0 0 8px rgba(255, 213, 79, 0.1);
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-3px); }
+    75% { transform: translateX(3px); }
+  }
+
+  .breaker-num {
+    font-size: 18px;
+    font-weight: 800;
+    color: rgba(180, 195, 230, 0.4);
+  }
+  .breaker.on .breaker-num { color: #66BB6A; }
+
+  .breaker-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(180, 195, 230, 0.3);
+  }
+  .breaker.on .breaker-label { color: rgba(102, 187, 106, 0.7); }
+
+  .switch-icon {
+    width: 16px;
+    height: 24px;
+    border-radius: 4px;
+    background: rgba(239, 83, 80, 0.4);
+    border: 1px solid rgba(239, 83, 80, 0.3);
+    position: relative;
+    transition: all 0.2s;
+  }
+  .switch-icon::after {
+    content: '';
+    position: absolute;
+    left: 2px; right: 2px;
+    height: 8px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.5);
+    transition: all 0.2s;
+    bottom: 2px;
+  }
+  .breaker.on .switch-icon {
+    background: rgba(102, 187, 106, 0.5);
+    border-color: rgba(102, 187, 106, 0.4);
+  }
+  .breaker.on .switch-icon::after {
+    bottom: auto;
+    top: 2px;
+  }
+
+  .status {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(180, 195, 230, 0.5);
+    min-height: 20px;
+    transition: color 0.3s;
+  }
+  .status.done { color: #66BB6A; font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+  .status.fail { color: #EF5350; }
+
+  .close-btn {
+    position: absolute;
+    top: 14px; right: 16px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: rgba(180, 195, 230, 0.5);
+    font-family: 'Outfit', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 12px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: all 0.2s;
+  }
+  .close-btn:hover { background: rgba(255, 255, 255, 0.1); color: #e0e8ff; }
+</style>
+</head>
+<body>
+
+<div class="overlay">
+  <div class="panel">
+    <button class="close-btn" onclick="closeTask()">CLOSE</button>
+    <div class="eyebrow">Electrical</div>
+    <h1>Circuit Breakers</h1>
+    <div class="desc">Flip the breakers in numbered order (1 through 5).</div>
+
+    <div class="breaker-grid" id="breakers"></div>
+    <div class="status" id="status">Flip breaker #1 first</div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var LABELS = ['Main', 'Aux', 'Port', 'Stbd', 'Deck'];
+  var order = [0, 1, 2, 3, 4];
+  // Shuffle display positions so the numbered breakers aren't in visual order
+  var displayOrder = [0, 1, 2, 3, 4];
+  for (var i = displayOrder.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = displayOrder[i]; displayOrder[i] = displayOrder[j]; displayOrder[j] = t;
+  }
+
+  var states = [false, false, false, false, false];
+  var nextExpected = 0;
+  var completed = false;
+  var breakersEl = document.getElementById('breakers');
+  var statusEl = document.getElementById('status');
+
+  function render() {
+    breakersEl.innerHTML = '';
+    for (var i = 0; i < 5; i++) {
+      var realIdx = displayOrder[i];
+      var b = document.createElement('div');
+      var isOn = states[realIdx];
+      var isNext = !completed && realIdx === nextExpected;
+      b.className = 'breaker' + (isOn ? ' on' : '') + (completed ? ' locked' : '') + (isNext ? ' next-hint' : '');
+      b.dataset.real = realIdx;
+      b.innerHTML =
+        '<div class="breaker-num">' + (realIdx + 1) + '</div>' +
+        '<div class="switch-icon"></div>' +
+        '<div class="breaker-label">' + LABELS[realIdx] + '</div>';
+      b.addEventListener('click', onBreakerClick);
+      breakersEl.appendChild(b);
+    }
+  }
+
+  function onBreakerClick(e) {
+    if (completed) return;
+    var el = e.currentTarget;
+    var realIdx = parseInt(el.dataset.real);
+
+    if (states[realIdx]) return; // already on
+
+    if (realIdx === nextExpected) {
+      states[realIdx] = true;
+      nextExpected++;
+      if (nextExpected >= 5) {
+        completed = true;
+        statusEl.textContent = 'LIGHTS RESTORED';
+        statusEl.className = 'status done';
+        render();
+        sendComplete();
+      } else {
+        statusEl.textContent = 'Good — now flip #' + (nextExpected + 1);
+        statusEl.className = 'status';
+        render();
+      }
+    } else {
+      // Wrong order — reset all
+      el.classList.add('wrong');
+      statusEl.textContent = 'Wrong order! Resetting...';
+      statusEl.className = 'status fail';
+      setTimeout(function() {
+        states = [false, false, false, false, false];
+        nextExpected = 0;
+        statusEl.textContent = 'Flip breaker #1 first';
+        statusEl.className = 'status';
+        render();
+      }, 800);
+    }
+  }
+
+  function sendComplete() {
+    if (typeof PortalsSdk !== 'undefined' && PortalsSdk && typeof PortalsSdk.sendMessageToUnity === 'function') {
+      PortalsSdk.sendMessageToUnity(JSON.stringify({
+        TaskName: 'Lights_Repair_Done',
+        TaskTargetState: 'SetNotActiveToActive'
+      }));
+    }
+    setTimeout(closeTask, 800);
+  }
+
+  window.closeTask = function() {
+    if (typeof PortalsSdk !== 'undefined' && PortalsSdk && typeof PortalsSdk.closeIframe === 'function') {
+      PortalsSdk.closeIframe();
+    }
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>
