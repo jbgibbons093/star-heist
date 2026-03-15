@@ -12,6 +12,10 @@
   html, body { background: transparent; overflow: hidden; font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif; }
 
   .hud {
+    position: fixed;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
     gap: 0;
@@ -22,13 +26,13 @@
     color: #e0e8ff;
     font-size: 14px;
     width: fit-content;
-    margin: 8px auto 0;
     box-shadow:
       0 4px 24px rgba(0, 0, 0, 0.5),
       0 0 1px rgba(100, 160, 255, 0.3),
       inset 0 1px 0 rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(12px);
     overflow: hidden;
+    z-index: 100;
   }
 
   .hud-section {
