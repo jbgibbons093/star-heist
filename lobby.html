@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Star Heist Lobby</title>
+<script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    background: transparent;
+    color: #f7f2df;
+  }
+  .panel {
+    width: min(420px, calc(100vw - 24px));
+    margin: 18px auto 0;
+    padding: 18px;
+    background: linear-gradient(180deg, rgba(6, 16, 26, 0.96), rgba(8, 10, 18, 0.94));
+    border: 1px solid rgba(94, 195, 255, 0.35);
+    border-radius: 16px;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(10px);
+  }
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: #71d4ff;
+    margin-bottom: 10px;
+  }
+  h1 {
+    font-size: 28px;
+    line-height: 1;
+    margin-bottom: 10px;
+  }
+  .subtitle {
+    color: rgba(247, 242, 223, 0.72);
+    font-size: 14px;
+    margin-bottom: 18px;
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .stat {
+    padding: 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .stat-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: rgba(247, 242, 223, 0.56);
+    margin-bottom: 8px;
+  }
+  .stat-value {
+    font-size: 26px;
+    font-weight: bold;
+  }
+  .roster {
+    margin-bottom: 16px;
+  }
+  .roster-label {
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(247, 242, 223, 0.56);
+    margin-bottom: 10px;
+  }
+  .roster-list {
+    display: grid;
+    gap: 8px;
+  }
+  .roster-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+  }
+  .roster-row.self {
+    border-color: rgba(113, 212, 255, 0.55);
+    background: rgba(27, 89, 119, 0.28);
+  }
+  .roster-name {
+    font-size: 15px;
+  }
+  .roster-tag {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(247, 242, 223, 0.5);
+  }
+  .empty {
+    padding: 18px 12px;
+    text-align: center;
+    color: rgba(247, 242, 223, 0.54);
+    border: 1px dashed rgba(255, 255, 255, 0.16);
+    border-radius: 10px;
+  }
+  .status {
+    min-height: 22px;
+    margin-bottom: 14px;
+    color: #f6c867;
+    font-size: 14px;
+  }
+  .actions {
+    display: flex;
+    gap: 10px;
+  }
+  button {
+    border: 0;
+    border-radius: 999px;
+    padding: 12px 16px;
+    font: inherit;
+    cursor: pointer;
+  }
+  .primary {
+    flex: 1;
+    background: linear-gradient(135deg, #7af6cb, #38a4f0);
+    color: #04111c;
+    font-weight: bold;
+  }
+  .secondary {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f7f2df;
+  }
+  button:disabled {
+    cursor: default;
+    opacity: 0.55;
+  }
+</style>
+</head>
+<body>
+<div class="panel" id="panel">
+  <div class="eyebrow">Chrono Dock</div>
+  <h1>Lobby Sync</h1>
+  <div class="subtitle">See who is in the room, coordinate in voice, then launch the round from here.</div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">Crew Present</div>
+      <div class="stat-value" id="player-count">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Status</div>
+      <div class="stat-value" id="lobby-state">Idle</div>
+    </div>
+  </div>
+
+  <div class="roster">
+    <div class="roster-label">Roster</div>
+    <div class="roster-list" id="roster-list">
+      <div class="empty">Waiting for player sync...</div>
+    </div>
+  </div>
+
+  <div class="status" id="status">Walk the ship, then start when everyone is ready.</div>
+
+  <div class="actions">
+    <button class="primary" id="start-btn">Start Match</button>
+    <button class="secondary" id="close-btn">Close</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  var playerCountEl = document.getElementById('player-count');
+  var lobbyStateEl = document.getElementById('lobby-state');
+  var rosterListEl = document.getElementById('roster-list');
+  var statusEl = document.getElementById('status');
+  var startBtn = document.getElementById('start-btn');
+  var closeBtn = document.getElementById('close-btn');
+
+  var roster = {};
+  var selfName = '';
+  var countdownEndMs = 0;
+  var countdownTimer = null;
+  var gamePhase = 0;
+  var lastMsgId = '';
+  var lastMsgTime = 0;
+
+  function canUseSdkSend() {
+    return typeof PortalsSdk !== 'undefined' &&
+      PortalsSdk &&
+      typeof PortalsSdk.sendMessageToUnity === 'function';
+  }
+
+  function sendTask(taskName) {
+    var payload = JSON.stringify({
+      TaskName: taskName,
+      TaskTargetState: 'SetNotActiveToActive'
+    });
+    if (canUseSdkSend()) {
+      PortalsSdk.sendMessageToUnity(payload);
+      return true;
+    }
+    if (window.parent && typeof window.parent.postMessage === 'function') {
+      window.parent.postMessage({ type: 'generic', message: payload }, '*');
+      return true;
+    }
+    return false;
+  }
+
+  function closeOverlay() {
+    if (typeof PortalsSdk !== 'undefined' && PortalsSdk && typeof PortalsSdk.closeIframe === 'function') {
+      PortalsSdk.closeIframe();
+    }
+  }
+
+  function setStatus(text) {
+    statusEl.textContent = text;
+  }
+
+  function sortedNames() {
+    return Object.keys(roster).sort(function(a, b) {
+      return a.localeCompare(b);
+    });
+  }
+
+  function updateRoster() {
+    var names = sortedNames();
+    playerCountEl.textContent = String(names.length);
+    if (!names.length) {
+      rosterListEl.innerHTML = '<div class="empty">Waiting for player sync...</div>';
+      return;
+    }
+    rosterListEl.innerHTML = names.map(function(name) {
+      var rowClass = name === selfName ? 'roster-row self' : 'roster-row';
+      var tag = name === selfName ? 'you' : 'crew';
+      return '<div class="' + rowClass + '"><div class="roster-name">' + escapeHtml(name) + '</div><div class="roster-tag">' + tag + '</div></div>';
+    }).join('');
+  }
+
+  function escapeHtml(text) {
+    return text.replace(/[&<>"]/g, function(char) {
+      if (char === '&') return '&amp;';
+      if (char === '<') return '&lt;';
+      if (char === '>') return '&gt;';
+      return '&quot;';
+    });
+  }
+
+  function setLobbyState(phase) {
+    gamePhase = parseInt(phase, 10) || 0;
+    if (gamePhase === 0) {
+      lobbyStateEl.textContent = countdownEndMs > 0 ? 'Launching' : 'Idle';
+      startBtn.disabled = countdownEndMs > 0;
+      return;
+    }
+    lobbyStateEl.textContent = 'Live';
+    startBtn.disabled = true;
+    setStatus('Match already in progress.');
+    closeOverlay();
+  }
+
+  function clearCountdown() {
+    countdownEndMs = 0;
+    if (countdownTimer) {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+    if (gamePhase === 0) {
+      lobbyStateEl.textContent = 'Idle';
+      startBtn.disabled = false;
+    }
+  }
+
+  function renderCountdown() {
+    if (!countdownEndMs) return;
+    var remaining = Math.max(0, Math.ceil((countdownEndMs - Date.now()) / 1000));
+    lobbyStateEl.textContent = 'Launching';
+    startBtn.disabled = true;
+    setStatus('Match begins in ' + remaining + '...');
+    if (remaining <= 0) {
+      clearCountdown();
+      setStatus('Match launch handed off to HUD.');
+    }
+  }
+
+  function startCountdown(seconds) {
+    countdownEndMs = Date.now() + (seconds * 1000);
+    renderCountdown();
+    if (countdownTimer) clearInterval(countdownTimer);
+    countdownTimer = setInterval(renderCountdown, 250);
+  }
+
+  function processMessage(message) {
+    var now = Date.now();
+    var msgId = (typeof message === 'string' ? message : JSON.stringify(message)) + '_' + Math.floor(now / 100);
+    if (msgId === lastMsgId && now - lastMsgTime < 200) return;
+    lastMsgId = msgId;
+    lastMsgTime = now;
+
+    var msg = typeof message === 'string' ? message : JSON.stringify(message);
+
+    if (msg.indexOf('pos_') === 0) {
+      try {
+        roster = JSON.parse(msg.substring(4)) || {};
+        updateRoster();
+      } catch (error) {}
+      return;
+    }
+
+    if (msg.indexOf('meeting_self_') === 0) {
+      selfName = msg.substring('meeting_self_'.length);
+      updateRoster();
+      return;
+    }
+
+    if (msg.indexOf('lobby_state_') === 0) {
+      setLobbyState(msg.substring('lobby_state_'.length));
+      return;
+    }
+
+    if (msg.indexOf('countdown_') === 0) {
+      startCountdown(parseInt(msg.split('_')[1], 10) || 5);
+      return;
+    }
+
+    if (msg.indexOf('game_start_') === 0) {
+      setStatus('Match launched.');
+      closeOverlay();
+      return;
+    }
+
+    if (msg === 'game_reset') {
+      clearCountdown();
+      setLobbyState(0);
+      setStatus('Round reset. Sync up and launch again.');
+    }
+  }
+
+  function setupListener() {
+    if (typeof PortalsSdk !== 'undefined' && PortalsSdk && typeof PortalsSdk.setMessageListener === 'function') {
+      PortalsSdk.setMessageListener(processMessage);
+      return;
+    }
+    setTimeout(setupListener, 150);
+  }
+
+  window.addEventListener('message', function(event) {
+    if (typeof event.data === 'string') processMessage(event.data);
+    else if (event.data && typeof event.data.message === 'string') processMessage(event.data.message);
+    else if (event.data && typeof event.data.portalsMessage === 'string') processMessage(event.data.portalsMessage);
+  });
+
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) renderCountdown();
+  });
+
+  window.addEventListener('focus', renderCountdown);
+
+  startBtn.addEventListener('click', function() {
+    if (startBtn.disabled) return;
+    if (sendTask('BeginLobbyCountdown')) {
+      startBtn.disabled = true;
+      setStatus('Requesting launch countdown...');
+    } else {
+      setStatus('Portals link unavailable. Try reopening the overlay.');
+    }
+  });
+
+  closeBtn.addEventListener('click', closeOverlay);
+
+  setupListener();
+})();
+</script>
+</body>
+</html>

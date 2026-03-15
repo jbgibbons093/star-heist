@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Star Heist Task Console</title>
+<script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Trebuchet MS", Arial, sans-serif;
+    background: transparent;
+    color: #edf3ff;
+  }
+  .shell {
+    width: min(520px, calc(100vw - 28px));
+    margin: 30px auto;
+    padding: 18px;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(8, 18, 36, 0.98), rgba(10, 12, 22, 0.94));
+    border: 1px solid rgba(110, 178, 255, 0.35);
+    box-shadow: 0 22px 80px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(14px);
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .eyebrow {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: #79d8ff;
+    margin-bottom: 8px;
+  }
+  h1 {
+    font-size: 26px;
+    margin-bottom: 8px;
+  }
+  .description {
+    color: rgba(237, 243, 255, 0.72);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  .close-btn {
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #edf3ff;
+    padding: 10px 14px;
+    cursor: pointer;
+  }
+  .status {
+    min-height: 22px;
+    margin-bottom: 14px;
+    color: #ffd67c;
+    font-size: 14px;
+  }
+  .board {
+    display: grid;
+    gap: 12px;
+  }
+  .module-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .module, .switch, .node {
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 14px;
+  }
+  .module h2, .switch h2, .node h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: rgba(237, 243, 255, 0.58);
+    margin-bottom: 10px;
+  }
+  .dial {
+    font-size: 28px;
+    font-weight: bold;
+    margin-bottom: 10px;
+  }
+  .action-btn {
+    width: 100%;
+    border: 0;
+    border-radius: 999px;
+    padding: 10px 12px;
+    font: inherit;
+    cursor: pointer;
+    background: linear-gradient(135deg, #8af3cb, #3aa8ef);
+    color: #031019;
+    font-weight: bold;
+  }
+  .action-btn.secondary {
+    background: rgba(255, 255, 255, 0.12);
+    color: #edf3ff;
+  }
+  .action-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .module.ok, .switch.ok, .node.ok {
+    border-color: rgba(115, 241, 175, 0.55);
+    background: rgba(41, 120, 88, 0.24);
+  }
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-top: 18px;
+  }
+  .progress {
+    color: rgba(237, 243, 255, 0.72);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="header">
+    <div>
+      <div class="eyebrow" id="eyebrow">Ship Systems</div>
+      <h1 id="title">Task Console</h1>
+      <div class="description" id="description"></div>
+    </div>
+    <button class="close-btn" id="close-btn">Close</button>
+  </div>
+
+  <div class="status" id="status">Bring all modules online.</div>
+  <div class="board" id="board"></div>
+
+  <div class="footer">
+    <div class="progress" id="progress">0 / 0 calibrated</div>
+    <button class="action-btn" id="complete-btn" disabled>Complete Task</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  var taskType = params.get('task') || 'engine';
+  var boardEl = document.getElementById('board');
+  var titleEl = document.getElementById('title');
+  var eyebrowEl = document.getElementById('eyebrow');
+  var descriptionEl = document.getElementById('description');
+  var statusEl = document.getElementById('status');
+  var progressEl = document.getElementById('progress');
+  var completeBtn = document.getElementById('complete-btn');
+  var closeBtn = document.getElementById('close-btn');
+
+  var taskMap = {
+    engine: {
+      title: 'Engine Calibration',
+      eyebrow: 'Propulsion',
+      description: 'Cycle each regulator until every engine band matches the target frequency.',
+      completeTask: 'Engine_Calibrate_Complete'
+    },
+    medbay: {
+      title: 'MedBay Scan',
+      eyebrow: 'Medical',
+      description: 'Run each scan node once to complete the station diagnostic.',
+      completeTask: 'MedBay_Complete'
+    },
+    comms: {
+      title: 'Comms Repair',
+      eyebrow: 'Communications',
+      description: 'Re-route the damaged channels and bring all three relays back online.',
+      completeTask: 'Comms_Repair_Timer'
+    }
+  };
+
+  var state = {
+    engine: [0, 0, 0],
+    medbay: [false, false, false, false],
+    comms: [false, false, false]
+  };
+
+  function canUseSdkSend() {
+    return typeof PortalsSdk !== 'undefined' &&
+      PortalsSdk &&
+      typeof PortalsSdk.sendMessageToUnity === 'function';
+  }
+
+  function sendTask(taskName) {
+    var payload = JSON.stringify({
+      TaskName: taskName,
+      TaskTargetState: 'SetNotActiveToActive'
+    });
+    if (canUseSdkSend()) {
+      PortalsSdk.sendMessageToUnity(payload);
+      return true;
+    }
+    if (window.parent && typeof window.parent.postMessage === 'function') {
+      window.parent.postMessage({ type: 'generic', message: payload }, '*');
+      return true;
+    }
+    return false;
+  }
+
+  function closeOverlay() {
+    if (typeof PortalsSdk !== 'undefined' && PortalsSdk && typeof PortalsSdk.closeIframe === 'function') {
+      PortalsSdk.closeIframe();
+    }
+  }
+
+  function updateProgress(done, total) {
+    progressEl.textContent = done + ' / ' + total + ' calibrated';
+    completeBtn.disabled = done !== total;
+  }
+
+  function renderEngine() {
+    var targets = [2, 1, 3];
+    var done = 0;
+    boardEl.innerHTML = '<div class="module-row">' + state.engine.map(function(value, index) {
+      var ok = value === targets[index];
+      if (ok) done += 1;
+      return [
+        '<div class="module' + (ok ? ' ok' : '') + '">',
+        '<h2>Band ' + (index + 1) + '</h2>',
+        '<div class="dial">0' + value + '</div>',
+        '<button class="action-btn secondary" data-engine="' + index + '">Cycle</button>',
+        '</div>'
+      ].join('');
+    }).join('') + '</div>';
+    statusEl.textContent = done === 3 ? 'Propulsion spectrum aligned.' : 'Match the three target bands: 02 / 01 / 03.';
+    updateProgress(done, 3);
+  }
+
+  function renderMedbay() {
+    var done = 0;
+    boardEl.innerHTML = '<div class="module-row">' + state.medbay.map(function(value, index) {
+      if (value) done += 1;
+      return [
+        '<div class="node' + (value ? ' ok' : '') + '">',
+        '<h2>Scan Node ' + (index + 1) + '</h2>',
+        '<div class="dial">' + (value ? 'OK' : '...') + '</div>',
+        '<button class="action-btn secondary" data-medbay="' + index + '">' + (value ? 'Verified' : 'Run Scan') + '</button>',
+        '</div>'
+      ].join('');
+    }).join('') + '</div>';
+    statusEl.textContent = done === 4 ? 'All patient channels stable.' : 'Run all four scan nodes to complete the diagnostic.';
+    updateProgress(done, 4);
+  }
+
+  function renderComms() {
+    var done = 0;
+    boardEl.innerHTML = '<div class="module-row">' + state.comms.map(function(value, index) {
+      if (value) done += 1;
+      return [
+        '<div class="switch' + (value ? ' ok' : '') + '">',
+        '<h2>Relay ' + String.fromCharCode(65 + index) + '</h2>',
+        '<div class="dial">' + (value ? 'ONLINE' : 'OFFLINE') + '</div>',
+        '<button class="action-btn secondary" data-comms="' + index + '">' + (value ? 'Linked' : 'Patch Relay') + '</button>',
+        '</div>'
+      ].join('');
+    }).join('') + '</div>';
+    statusEl.textContent = done === 3 ? 'Signal path restored.' : 'Patch all relays to restore communications.';
+    updateProgress(done, 3);
+  }
+
+  function render() {
+    var meta = taskMap[taskType] || taskMap.engine;
+    titleEl.textContent = meta.title;
+    eyebrowEl.textContent = meta.eyebrow;
+    descriptionEl.textContent = meta.description;
+    if (taskType === 'medbay') renderMedbay();
+    else if (taskType === 'comms') renderComms();
+    else renderEngine();
+  }
+
+  boardEl.addEventListener('click', function(event) {
+    var engineIndex = event.target.getAttribute('data-engine');
+    if (engineIndex !== null) {
+      var idx = parseInt(engineIndex, 10);
+      state.engine[idx] = (state.engine[idx] + 1) % 4;
+      render();
+      return;
+    }
+    var medbayIndex = event.target.getAttribute('data-medbay');
+    if (medbayIndex !== null) {
+      state.medbay[parseInt(medbayIndex, 10)] = true;
+      render();
+      return;
+    }
+    var commsIndex = event.target.getAttribute('data-comms');
+    if (commsIndex !== null) {
+      state.comms[parseInt(commsIndex, 10)] = true;
+      render();
+    }
+  });
+
+  completeBtn.addEventListener('click', function() {
+    var taskName = (taskMap[taskType] || taskMap.engine).completeTask;
+    if (!sendTask(taskName)) {
+      statusEl.textContent = 'Portals link unavailable. Reopen the task console.';
+      return;
+    }
+    completeBtn.disabled = true;
+    statusEl.textContent = 'Task complete. Closing console...';
+    setTimeout(closeOverlay, 650);
+  });
+
+  closeBtn.addEventListener('click', closeOverlay);
+
+  render();
+})();
+</script>
+</body>
+</html>
