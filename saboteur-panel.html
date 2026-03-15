@@ -21,39 +21,35 @@
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 10px;
-    padding: 10px 16px;
-    background: rgba(30, 8, 12, 0.92);
-    border: 1px solid rgba(239, 83, 80, 0.25);
-    border-radius: 16px;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    gap: 6px;
+    padding: 0;
+    background: none;
+    border: none;
     pointer-events: auto;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(239, 83, 80, 0.08);
   }
 
   .panel.hidden { display: none; }
 
   .cat-btn {
     position: relative;
-    padding: 10px 18px;
-    background: rgba(239, 83, 80, 0.1);
-    border: 1px solid rgba(239, 83, 80, 0.2);
-    border-radius: 12px;
+    padding: 6px 14px;
+    background: rgba(30, 8, 12, 0.92);
+    border: 1px solid rgba(239, 83, 80, 0.3);
+    border-radius: 10px;
     color: #EF5350;
     font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1.5px;
+    letter-spacing: 1px;
     cursor: pointer;
     transition: all 0.25s ease;
-    min-width: 110px;
     text-align: center;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
   .cat-btn:hover:not(.disabled) {
     background: rgba(239, 83, 80, 0.2);
@@ -79,11 +75,10 @@
   }
 
   .cooldown-text {
-    display: block;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 600;
     color: rgba(239, 83, 80, 0.5);
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
   }
   .cat-btn:not(.disabled) .cooldown-text { color: #66BB6A; }
   .cat-btn.disabled .cooldown-text { color: #EF5350; }
@@ -108,23 +103,22 @@
 
   .submenu {
     position: fixed;
-    bottom: 76px;
+    bottom: 52px;
     left: 50%;
     transform: translateX(-50%);
     display: none;
     flex-wrap: wrap;
-    gap: 8px;
-    padding: 10px 14px;
-    background: rgba(20, 6, 10, 0.96);
+    gap: 5px;
+    padding: 6px 10px;
+    background: rgba(20, 6, 10, 0.94);
     border: 1px solid rgba(239, 83, 80, 0.2);
-    border-radius: 14px;
+    border-radius: 10px;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    max-width: 520px;
+    max-width: 480px;
     justify-content: center;
     pointer-events: auto;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-    animation: submenuIn 0.2s ease;
+    animation: submenuIn 0.15s ease;
   }
   .submenu.visible { display: flex; }
 
