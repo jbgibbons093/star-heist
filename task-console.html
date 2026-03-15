@@ -221,6 +221,12 @@
     }
   }
 
+  function focusGameKeyboard() {
+    if (typeof PortalsSdk !== 'undefined' && PortalsSdk && typeof PortalsSdk.focusGameKeyboard === 'function') {
+      PortalsSdk.focusGameKeyboard();
+    }
+  }
+
   function updateProgress(done, total) {
     progressEl.textContent = done + ' / ' + total + ' calibrated';
     completeBtn.disabled = done !== total;
@@ -292,19 +298,24 @@
       var idx = parseInt(engineIndex, 10);
       state.engine[idx] = (state.engine[idx] + 1) % 4;
       render();
+      setTimeout(focusGameKeyboard, 50);
       return;
     }
     var medbayIndex = event.target.getAttribute('data-medbay');
     if (medbayIndex !== null) {
       state.medbay[parseInt(medbayIndex, 10)] = true;
       render();
+      setTimeout(focusGameKeyboard, 50);
       return;
     }
     var commsIndex = event.target.getAttribute('data-comms');
     if (commsIndex !== null) {
       state.comms[parseInt(commsIndex, 10)] = true;
       render();
+      setTimeout(focusGameKeyboard, 50);
+      return;
     }
+    focusGameKeyboard();
   });
 
   completeBtn.addEventListener('click', function() {
@@ -316,11 +327,37 @@
     completeBtn.disabled = true;
     statusEl.textContent = 'Task complete. Closing console...';
     setTimeout(closeOverlay, 650);
+    setTimeout(focusGameKeyboard, 50);
   });
 
-  closeBtn.addEventListener('click', closeOverlay);
+  closeBtn.addEventListener('click', function() {
+    closeOverlay();
+    setTimeout(focusGameKeyboard, 50);
+  });
+
+  document.addEventListener('click', function(event) {
+    if (event.target.closest && event.target.closest('button')) {
+      return;
+    }
+    focusGameKeyboard();
+  });
+
+  document.addEventListener('mouseup', function(event) {
+    if (event.target.closest && event.target.closest('button')) {
+      return;
+    }
+    setTimeout(focusGameKeyboard, 50);
+  });
+
+  document.addEventListener('keydown', function() {
+    focusGameKeyboard();
+  });
 
   render();
+  focusGameKeyboard();
+  setTimeout(focusGameKeyboard, 100);
+  setTimeout(focusGameKeyboard, 300);
+  setTimeout(focusGameKeyboard, 600);
 })();
 </script>
 </body>

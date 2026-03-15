@@ -226,6 +226,12 @@
     }
   }
 
+  function focusGameKeyboard() {
+    if (typeof PortalsSdk !== 'undefined' && PortalsSdk && typeof PortalsSdk.focusGameKeyboard === 'function') {
+      PortalsSdk.focusGameKeyboard();
+    }
+  }
+
   function setStatus(text) {
     statusEl.textContent = text;
   }
@@ -377,11 +383,37 @@
     } else {
       setStatus('Portals link unavailable. Try reopening the overlay.');
     }
+    setTimeout(focusGameKeyboard, 50);
   });
 
-  closeBtn.addEventListener('click', closeOverlay);
+  closeBtn.addEventListener('click', function() {
+    closeOverlay();
+    setTimeout(focusGameKeyboard, 50);
+  });
+
+  document.addEventListener('click', function(event) {
+    if (event.target.closest && event.target.closest('button')) {
+      return;
+    }
+    focusGameKeyboard();
+  });
+
+  document.addEventListener('mouseup', function(event) {
+    if (event.target.closest && event.target.closest('button')) {
+      return;
+    }
+    setTimeout(focusGameKeyboard, 50);
+  });
+
+  document.addEventListener('keydown', function() {
+    focusGameKeyboard();
+  });
 
   setupListener();
+  focusGameKeyboard();
+  setTimeout(focusGameKeyboard, 100);
+  setTimeout(focusGameKeyboard, 300);
+  setTimeout(focusGameKeyboard, 600);
 })();
 </script>
 </body>
