@@ -6,8 +6,10 @@
 <title>Star Heist Voting</title>
 <script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap');
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { background: transparent; overflow: hidden; font-family: 'Courier New', monospace; }
+  html, body { background: transparent; overflow: hidden; font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif; }
 
   .overlay {
     position: fixed;
@@ -15,152 +17,237 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.7);
+    background: radial-gradient(ellipse at center, rgba(5, 10, 30, 0.85), rgba(0, 0, 0, 0.92));
   }
 
   .voting-panel {
-    background: rgba(10, 10, 30, 0.95);
-    border: 2px solid rgba(255, 200, 0, 0.5);
-    border-radius: 12px;
-    padding: 20px;
-    width: 700px;
-    max-height: 520px;
+    background: linear-gradient(160deg, rgba(12, 18, 45, 0.97), rgba(8, 12, 35, 0.97));
+    border: 1px solid rgba(80, 140, 255, 0.15);
+    border-radius: 20px;
+    padding: 24px 28px;
+    width: 720px;
+    max-height: 560px;
     overflow-y: auto;
+    box-shadow:
+      0 8px 40px rgba(0, 0, 0, 0.6),
+      0 0 1px rgba(100, 160, 255, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
+  .voting-panel::-webkit-scrollbar { width: 4px; }
+  .voting-panel::-webkit-scrollbar-track { background: transparent; }
+  .voting-panel::-webkit-scrollbar-thumb { background: rgba(80, 140, 255, 0.2); border-radius: 2px; }
 
-  .header {
-    text-align: center;
-    margin-bottom: 16px;
-  }
+  /* ── Header ── */
+  .header { text-align: center; margin-bottom: 20px; }
   .header h1 {
-    color: #FFAA00;
-    font-size: 22px;
-    margin-bottom: 4px;
+    color: #FFD54F;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    text-shadow: 0 0 20px rgba(255, 213, 79, 0.2);
   }
   .header .reason {
-    color: #aaa;
+    color: rgba(180, 195, 230, 0.7);
     font-size: 13px;
+    font-weight: 400;
   }
   .header .timer {
-    color: #FF4444;
-    font-size: 28px;
-    font-weight: bold;
-    margin-top: 6px;
+    color: #EF5350;
+    font-size: 36px;
+    font-weight: 800;
+    margin-top: 8px;
+    letter-spacing: 2px;
+    transition: color 0.3s;
   }
-  .header .timer.warning { animation: pulse 1s infinite; }
+  .header .timer.warning { animation: timerPulse 1s ease-in-out infinite; }
 
+  /* ── Player Grid ── */
   .player-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-    margin-bottom: 16px;
+    gap: 10px;
+    margin-bottom: 18px;
   }
 
   .player-card {
-    background: rgba(30, 30, 60, 0.8);
-    border: 1px solid rgba(100, 100, 200, 0.3);
-    border-radius: 8px;
-    padding: 10px;
+    background: rgba(20, 30, 60, 0.6);
+    border: 1px solid rgba(80, 120, 200, 0.15);
+    border-radius: 14px;
+    padding: 14px 10px;
     text-align: center;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
   }
+  .player-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, rgba(80, 140, 255, 0.3), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .player-card:hover:not(.dead)::before { opacity: 1; }
+
   .player-card.dead {
-    opacity: 0.4;
-    border-color: rgba(100, 0, 0, 0.3);
+    opacity: 0.35;
+    border-color: rgba(80, 40, 40, 0.2);
   }
   .player-card.voted-for {
-    border-color: rgba(255, 200, 0, 0.6);
-    background: rgba(60, 50, 0, 0.5);
+    border-color: rgba(255, 213, 79, 0.5);
+    background: rgba(50, 45, 15, 0.5);
+    box-shadow: 0 0 16px rgba(255, 213, 79, 0.1);
+  }
+  .player-card.voted-for::before {
+    opacity: 1;
+    background: linear-gradient(90deg, transparent, rgba(255, 213, 79, 0.5), transparent);
   }
 
+  /* ── Avatar Circle ── */
+  .player-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin: 0 auto 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.9);
+    position: relative;
+  }
+  .player-card.dead .player-avatar { filter: grayscale(1); opacity: 0.5; }
+
   .player-name {
-    color: #ddd;
+    color: #D0D8F0;
     font-size: 13px;
-    font-weight: bold;
-    margin-bottom: 6px;
+    font-weight: 600;
+    margin-bottom: 4px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .player-card.dead .player-name { color: #666; text-decoration: line-through; }
-
-  .vote-btn {
-    padding: 5px 14px;
-    background: rgba(0, 100, 200, 0.6);
-    border: 1px solid rgba(0, 150, 255, 0.4);
-    border-radius: 4px;
-    color: #aaddff;
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .vote-btn:hover { background: rgba(0, 130, 255, 0.8); color: #fff; }
-  .vote-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+  .player-card.dead .player-name { color: #556; text-decoration: line-through; }
 
   .status-label {
-    color: #666;
-    font-size: 11px;
+    font-size: 10px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
+    margin-bottom: 8px;
+    color: rgba(120, 140, 180, 0.5);
   }
-  .status-label.you { color: #00CCFF; }
-  .status-label.dead-label { color: #884444; }
+  .status-label.you { color: #4FC3F7; }
+  .status-label.dead-label { color: #EF5350; opacity: 0.6; }
 
-  .skip-row {
-    text-align: center;
-    margin-bottom: 12px;
-  }
-  .skip-btn {
-    padding: 8px 30px;
-    background: rgba(80, 80, 80, 0.6);
-    border: 1px solid rgba(150, 150, 150, 0.4);
-    border-radius: 6px;
-    color: #ccc;
-    font-family: 'Courier New', monospace;
-    font-size: 13px;
+  .vote-btn {
+    padding: 6px 18px;
+    background: linear-gradient(135deg, rgba(25, 100, 210, 0.7), rgba(30, 120, 240, 0.5));
+    border: 1px solid rgba(60, 150, 255, 0.3);
+    border-radius: 20px;
+    color: #B0D4FF;
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.25s ease;
   }
-  .skip-btn:hover { background: rgba(120, 120, 120, 0.7); color: #fff; }
-  .skip-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+  .vote-btn:hover:not(.disabled) {
+    background: linear-gradient(135deg, rgba(40, 120, 240, 0.9), rgba(50, 140, 255, 0.7));
+    color: #fff;
+    box-shadow: 0 2px 12px rgba(50, 130, 255, 0.3);
+    transform: translateY(-1px);
+  }
+  .vote-btn.disabled {
+    opacity: 0.2;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .vote-count {
+    color: #FFD54F;
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 6px;
+    display: none;
+  }
+  .vote-count.visible { display: block; }
+
+  /* ── Skip & Footer ── */
+  .skip-row { text-align: center; margin-bottom: 14px; }
+  .skip-btn {
+    padding: 10px 36px;
+    background: rgba(50, 55, 75, 0.5);
+    border: 1px solid rgba(120, 130, 160, 0.25);
+    border-radius: 24px;
+    color: rgba(180, 190, 220, 0.8);
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+  }
+  .skip-btn:hover:not(.disabled) {
+    background: rgba(70, 75, 100, 0.6);
+    color: #fff;
+  }
+  .skip-btn.disabled { opacity: 0.2; cursor: not-allowed; pointer-events: none; }
 
   .footer {
     text-align: center;
-    color: #888;
-    font-size: 12px;
+    color: rgba(140, 155, 190, 0.6);
+    font-size: 13px;
+    font-weight: 400;
   }
-  .footer .my-vote { color: #FFAA00; }
+  .footer .my-vote { color: #FFD54F; font-weight: 600; }
 
+  /* ── Result Overlay ── */
   .result-overlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
     display: none;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.9);
     z-index: 10;
   }
   .result-overlay.visible { display: flex; }
+
   .result-box {
     text-align: center;
-    padding: 40px;
+    padding: 50px;
+    animation: resultReveal 0.6s ease-out;
   }
-  .result-box h2 { font-size: 28px; margin-bottom: 10px; }
-  .result-box .eject { color: #FF4444; }
-  .result-box .safe { color: #00FF88; }
-  .result-box .role-reveal { color: #FFAA00; font-size: 16px; margin-top: 8px; }
-
-  .vote-count {
-    color: #FFAA00;
-    font-size: 11px;
-    margin-top: 4px;
-    display: none;
+  .result-box h2 {
+    font-size: 32px;
+    font-weight: 800;
+    margin-bottom: 12px;
+    letter-spacing: 1px;
   }
-  .vote-count.visible { display: block; }
+  .result-box .eject { color: #EF5350; text-shadow: 0 0 30px rgba(239, 83, 80, 0.3); }
+  .result-box .safe { color: #66BB6A; text-shadow: 0 0 30px rgba(102, 187, 106, 0.3); }
+  .result-box .role-reveal {
+    color: rgba(200, 210, 240, 0.7);
+    font-size: 18px;
+    margin-top: 10px;
+    font-weight: 400;
+  }
 
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+  /* ── Animations ── */
+  @keyframes timerPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.05); }
+  }
+  @keyframes resultReveal {
+    0% { opacity: 0; transform: scale(0.8) translateY(20px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
   }
 </style>
 </head>
@@ -202,20 +289,18 @@
     '5': 'Reactor', '6': 'Comms Array', '7': 'Airlock'
   };
 
+  var AVATAR_COLORS = [
+    '#E53935','#1E88E5','#43A047','#FB8C00','#8E24AA',
+    '#00ACC1','#FFB300','#6D4C41','#546E7A','#D81B60',
+    '#7CB342','#5E35B1'
+  ];
+
   var MAX_SLOTS = 12;
   var MEETING_SPAWNS = {
-    1: {x: 5.0, z: -34.0},
-    2: {x: 4.3, z: -31.5},
-    3: {x: 2.5, z: -29.7},
-    4: {x: 0.0, z: -29.0},
-    5: {x: -2.5, z: -29.7},
-    6: {x: -4.3, z: -31.5},
-    7: {x: -5.0, z: -34.0},
-    8: {x: -4.3, z: -36.5},
-    9: {x: -2.5, z: -38.3},
-    10: {x: 0.0, z: -39.0},
-    11: {x: 2.5, z: -38.3},
-    12: {x: 4.3, z: -36.5}
+    1:{x:5.0,z:-34.0},2:{x:4.3,z:-31.5},3:{x:2.5,z:-29.7},
+    4:{x:0.0,z:-29.0},5:{x:-2.5,z:-29.7},6:{x:-4.3,z:-31.5},
+    7:{x:-5.0,z:-34.0},8:{x:-4.3,z:-36.5},9:{x:-2.5,z:-38.3},
+    10:{x:0.0,z:-39.0},11:{x:2.5,z:-38.3},12:{x:4.3,z:-36.5}
   };
 
   reasonEl.textContent = 'Waiting for meeting data...';
@@ -245,12 +330,7 @@
   function resetRoster() {
     rosterBySlot = {};
     for (var i = 1; i <= MAX_SLOTS; i++) {
-      rosterBySlot[i] = {
-        name: '',
-        present: false,
-        alive: false,
-        isSelf: false
-      };
+      rosterBySlot[i] = { name: '', present: false, alive: false, isSelf: false };
     }
   }
 
@@ -266,6 +346,7 @@
       card.className = 'player-card dead';
       card.id = 'card-' + i;
       card.innerHTML =
+        '<div class="player-avatar" id="avatar-' + i + '" style="background:' + AVATAR_COLORS[i-1] + '">' + i + '</div>' +
         '<div class="player-name" id="name-' + i + '">Open Slot ' + i + '</div>' +
         '<div class="status-label dead-label" id="status-' + i + '">EMPTY</div>' +
         '<button class="vote-btn disabled" id="btn-' + i + '" onclick="castVote(' + i + ')">VOTE</button>' +
@@ -317,15 +398,11 @@
       btn.textContent = 'VOTE';
       setButtonDisabled(btn, voted || meetingResolved || !entry.alive);
     }
-
     setButtonDisabled(skipBtn, voted || meetingResolved);
   }
 
   function stopTimer() {
-    if (timerInterval) {
-      clearInterval(timerInterval);
-      timerInterval = null;
-    }
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   }
 
   function renderTimer() {
@@ -335,107 +412,61 @@
     timerEl.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
     timerEl.classList.toggle('warning', remainingSeconds <= 10);
     if (remainingSeconds <= 0 && !voted && !meetingResolved) {
-      stopTimer();
-      castVote(0);
-      requestTally(150);
+      stopTimer(); castVote(0); requestTally(150);
     } else if (remainingSeconds <= 0 && !meetingResolved) {
-      stopTimer();
-      requestTally(0);
+      stopTimer(); requestTally(0);
     }
   }
 
   function startTimer(durationSeconds) {
     timerDeadlineMs = Date.now() + durationSeconds * 1000;
-    stopTimer();
-    renderTimer();
+    stopTimer(); renderTimer();
     timerInterval = setInterval(renderTimer, 1000);
   }
 
   function getClosestMeetingSlot(position) {
-    var closestSlot = 0;
-    var closestDistanceSq = Infinity;
+    var closestSlot = 0, closestDistanceSq = Infinity;
     for (var i = 1; i <= MAX_SLOTS; i++) {
       var spawn = MEETING_SPAWNS[i];
-      var dx = position.x - spawn.x;
-      var dz = position.z - spawn.z;
+      var dx = position.x - spawn.x, dz = position.z - spawn.z;
       var distanceSq = dx * dx + dz * dz;
-      if (distanceSq < closestDistanceSq) {
-        closestDistanceSq = distanceSq;
-        closestSlot = i;
-      }
+      if (distanceSq < closestDistanceSq) { closestDistanceSq = distanceSq; closestSlot = i; }
     }
-    if (closestDistanceSq > 16) {
-      return 0;
-    }
-    return closestSlot;
+    return closestDistanceSq > 16 ? 0 : closestSlot;
   }
 
   function applyPositionRoster(posData) {
     if (!posData || typeof posData !== 'object') return;
-
     var nextRoster = {};
     for (var slot = 1; slot <= MAX_SLOTS; slot++) {
-      nextRoster[slot] = {
-        name: '',
-        present: false,
-        alive: false,
-        isSelf: false,
-        distanceSq: Infinity
-      };
+      nextRoster[slot] = { name: '', present: false, alive: false, isSelf: false, distanceSq: Infinity };
     }
-
     Object.keys(posData).forEach(function(username) {
       var position = posData[username];
       if (!position || typeof position.x !== 'number' || typeof position.z !== 'number') return;
       var slot = getClosestMeetingSlot(position);
       if (!slot) return;
-
       var spawn = MEETING_SPAWNS[slot];
-      var dx = position.x - spawn.x;
-      var dz = position.z - spawn.z;
+      var dx = position.x - spawn.x, dz = position.z - spawn.z;
       var distanceSq = dx * dx + dz * dz;
-
       if (distanceSq < nextRoster[slot].distanceSq) {
-        nextRoster[slot] = {
-          name: username,
-          present: true,
-          alive: true,
-          isSelf: selfName !== '' && username === selfName,
-          distanceSq: distanceSq
-        };
+        nextRoster[slot] = { name: username, present: true, alive: true, isSelf: selfName !== '' && username === selfName, distanceSq: distanceSq };
       }
     });
-
     for (var i = 1; i <= MAX_SLOTS; i++) {
-      rosterBySlot[i] = {
-        name: nextRoster[i].name,
-        present: nextRoster[i].present,
-        alive: nextRoster[i].alive,
-        isSelf: nextRoster[i].isSelf
-      };
+      rosterBySlot[i] = { name: nextRoster[i].name, present: nextRoster[i].present, alive: nextRoster[i].alive, isSelf: nextRoster[i].isSelf };
     }
     updateRosterDisplay();
   }
 
-  function tryParseJson(raw) {
-    try {
-      return JSON.parse(raw);
-    } catch (err) {
-      return null;
-    }
-  }
+  function tryParseJson(raw) { try { return JSON.parse(raw); } catch(e) { return null; } }
 
   function resetMeetingState() {
-    voted = false;
-    myVote = -1;
-    meetingResolved = false;
-    tallyDispatched = false;
-    tallyRequested = false;
+    voted = false; myVote = -1; meetingResolved = false;
+    tallyDispatched = false; tallyRequested = false;
     voteCounts = new Array(MAX_SLOTS + 1).fill(0);
     resultOverlay.classList.remove('visible');
-    resetRoster();
-    updateVoteDisplay();
-    updateRosterDisplay();
+    resetRoster(); updateVoteDisplay(); updateRosterDisplay();
     statusEl.textContent = 'Click a player to vote';
     startTimer(45);
   }
@@ -446,15 +477,11 @@
       var target = rosterBySlot[slot];
       if (!target || !target.present || !target.alive) return;
     }
-
-    voted = true;
-    myVote = slot;
-
+    voted = true; myVote = slot;
     PortalsSdk.sendMessageToUnity(JSON.stringify({
       TaskName: slot === 0 ? 'Cast_Vote_Skip' : 'Cast_Vote_' + slot,
       TaskTargetState: 'SetNotActiveToActive'
     }));
-
     updateRosterDisplay();
     if (slot === 0) {
       statusEl.innerHTML = '<span class="my-vote">You voted to SKIP</span>';
@@ -468,24 +495,18 @@
     tallyRequested = true;
     window.setTimeout(function() {
       if (tallyDispatched || meetingResolved) return;
-      PortalsSdk.sendMessageToUnity(JSON.stringify({
-        TaskName: 'TallyVotes',
-        TaskTargetState: 'SetNotActiveToActive'
-      }));
+      PortalsSdk.sendMessageToUnity(JSON.stringify({ TaskName: 'TallyVotes', TaskTargetState: 'SetNotActiveToActive' }));
     }, delayMs || 0);
   }
 
   function showResult(ejected, slot, role) {
-    stopTimer();
-    meetingResolved = true;
-    updateRosterDisplay();
-
+    stopTimer(); meetingResolved = true; updateRosterDisplay();
     if (ejected) {
       var roleText = role === 1 ? 'SABOTEUR' : 'CREW';
-      var roleColor = role === 1 ? '#FF4444' : '#00CCFF';
+      var roleColor = role === 1 ? '#EF5350' : '#4FC3F7';
       resultBox.innerHTML =
         '<h2 class="eject">' + escapeHtml(formatName(slot)) + ' was ejected!</h2>' +
-        '<div class="role-reveal">They were: <span style="color:' + roleColor + '">' + roleText + '</span></div>';
+        '<div class="role-reveal">They were: <span style="color:' + roleColor + ';font-weight:700">' + roleText + '</span></div>';
     } else {
       resultBox.innerHTML =
         '<h2 class="safe">No one was ejected.</h2>' +
@@ -494,25 +515,17 @@
     resultOverlay.classList.add('visible');
   }
 
-  buildCards();
-  resetRoster();
-  updateRosterDisplay();
-  renderTimer();
+  buildCards(); resetRoster(); updateRosterDisplay(); renderTimer();
 
   document.addEventListener('visibilitychange', function() {
     if (!document.hidden) {
       renderTimer();
-      if (!meetingResolved && timerDeadlineMs > 0 && !timerInterval) {
-        timerInterval = setInterval(renderTimer, 1000);
-      }
+      if (!meetingResolved && timerDeadlineMs > 0 && !timerInterval) timerInterval = setInterval(renderTimer, 1000);
     }
   });
-
   window.addEventListener('focus', function() {
     renderTimer();
-    if (!meetingResolved && timerDeadlineMs > 0 && !timerInterval) {
-      timerInterval = setInterval(renderTimer, 1000);
-    }
+    if (!meetingResolved && timerDeadlineMs > 0 && !timerInterval) timerInterval = setInterval(renderTimer, 1000);
   });
 
   var lastMsgId = '';
@@ -522,91 +535,46 @@
     var now = Date.now();
     var messageKey = (typeof message === 'string' ? message : JSON.stringify(message)) + '_' + Math.floor(now / 100);
     if (messageKey === lastMsgId && now - lastMsgTime < 200) return;
-    lastMsgId = messageKey;
-    lastMsgTime = now;
-
+    lastMsgId = messageKey; lastMsgTime = now;
     var msg = typeof message === 'string' ? message : JSON.stringify(message);
 
-    if (msg.startsWith('meeting_self_')) {
-      selfName = msg.substring('meeting_self_'.length);
-      updateRosterDisplay();
-      return;
-    }
-
+    if (msg.startsWith('meeting_self_')) { selfName = msg.substring('meeting_self_'.length); updateRosterDisplay(); return; }
     if (msg.startsWith('meeting_start_')) {
       var parts = msg.split('_');
       var meetingReason = parts[2] || '1';
       var bodyZone = parts[3] || '0';
-      if (meetingReason === '1') {
-        reasonEl.textContent = 'Body reported in: ' + (ZONE_NAMES[bodyZone] || 'Unknown');
-      } else {
-        reasonEl.textContent = 'Emergency button pressed';
-      }
-      resetMeetingState();
-      return;
+      reasonEl.textContent = meetingReason === '1' ? 'Body reported in: ' + (ZONE_NAMES[bodyZone] || 'Unknown') : 'Emergency button pressed';
+      resetMeetingState(); return;
     }
-
-    if (msg.startsWith('pos_')) {
-      var posPayload = tryParseJson(msg.substring(4));
-      if (posPayload) {
-        applyPositionRoster(posPayload);
-      }
-      return;
-    }
-
+    if (msg.startsWith('pos_')) { var posPayload = tryParseJson(msg.substring(4)); if (posPayload) applyPositionRoster(posPayload); return; }
     if (msg.startsWith('tally_')) {
       tallyRequested = false;
       var tallyParts = msg.split('_');
-      for (var i = 1; i <= MAX_SLOTS; i++) {
-        voteCounts[i] = parseFloat(tallyParts[i]) || 0;
-      }
+      for (var i = 1; i <= MAX_SLOTS; i++) voteCounts[i] = parseFloat(tallyParts[i]) || 0;
       var skipCount = parseFloat(tallyParts[MAX_SLOTS + 1]) || 0;
       updateVoteDisplay();
-
       if (tallyDispatched) return;
       tallyDispatched = true;
-
-      var maxVotes = 0;
-      var maxSlot = -1;
-      var tie = false;
+      var maxVotes = 0, maxSlot = -1, tie = false;
       for (var slot = 1; slot <= MAX_SLOTS; slot++) {
-        if (voteCounts[slot] > maxVotes) {
-          maxVotes = voteCounts[slot];
-          maxSlot = slot;
-          tie = false;
-        } else if (voteCounts[slot] === maxVotes && voteCounts[slot] > 0) {
-          tie = true;
-        }
+        if (voteCounts[slot] > maxVotes) { maxVotes = voteCounts[slot]; maxSlot = slot; tie = false; }
+        else if (voteCounts[slot] === maxVotes && voteCounts[slot] > 0) { tie = true; }
       }
-
-      statusEl.textContent = 'Vote tallied. Waiting for ejection result...';
+      statusEl.textContent = 'Vote tallied. Waiting for result...';
       if (tie || skipCount >= maxVotes || maxVotes === 0) {
-        PortalsSdk.sendMessageToUnity(JSON.stringify({
-          TaskName: 'No_Ejection',
-          TaskTargetState: 'SetNotActiveToActive'
-        }));
+        PortalsSdk.sendMessageToUnity(JSON.stringify({ TaskName: 'No_Ejection', TaskTargetState: 'SetNotActiveToActive' }));
       } else {
-        PortalsSdk.sendMessageToUnity(JSON.stringify({
-          TaskName: 'Eject_Player_' + maxSlot,
-          TaskTargetState: 'SetNotActiveToActive'
-        }));
+        PortalsSdk.sendMessageToUnity(JSON.stringify({ TaskName: 'Eject_Player_' + maxSlot, TaskTargetState: 'SetNotActiveToActive' }));
       }
       return;
     }
-
     if (msg.startsWith('eject_')) {
       var ejectParts = msg.split('_');
-      if (ejectParts[1] === 'none') {
-        showResult(false, 0, 0);
-      } else {
-        showResult(true, parseInt(ejectParts[1], 10), parseInt(ejectParts[2], 10) || 0);
-      }
+      if (ejectParts[1] === 'none') showResult(false, 0, 0);
+      else showResult(true, parseInt(ejectParts[1], 10), parseInt(ejectParts[2], 10) || 0);
       return;
     }
-
-    if (msg === 'game_reset' || msg.startsWith('game_over_')) {
-      stopTimer();
-    }
+    if (msg === 'game_reset' || msg.startsWith('game_over_')) stopTimer();
   });
 })();
 </script>

@@ -4,10 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Star Heist - Game Over</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { background: transparent; overflow: hidden; font-family: 'Courier New', monospace; }
+  html, body {
+    background: transparent;
+    overflow: hidden;
+    font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+  }
 
   .overlay {
     position: fixed;
@@ -15,97 +20,182 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    background: radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.6) 100%);
   }
 
   .game-over-panel {
     text-align: center;
-    padding: 40px 60px;
-    border-radius: 16px;
-    min-width: 500px;
+    padding: 48px 64px;
+    border-radius: 20px;
+    min-width: 480px;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    animation: panelIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .game-over-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
   }
 
-  /* Crew wins - blue/green */
-  .theme-crew {
-    background: rgba(0, 20, 50, 0.95);
-    border: 2px solid rgba(0, 200, 255, 0.5);
-    box-shadow: 0 0 40px rgba(0, 100, 200, 0.3);
+  @keyframes panelIn {
+    0% { opacity: 0; transform: scale(0.85) translateY(20px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
   }
-  .theme-crew .title { color: #00CCFF; }
-  .theme-crew .subtitle { color: #00FF88; }
+
+  /* Crew wins - blue/cyan */
+  .theme-crew {
+    --accent: #4FC3F7;
+    --accent-glow: rgba(79, 195, 247, 0.3);
+    --subtitle-color: #66BB6A;
+    background: rgba(8, 15, 35, 0.95);
+    border: 1px solid rgba(79, 195, 247, 0.25);
+    box-shadow: 0 8px 48px rgba(0, 0, 0, 0.6), 0 0 40px var(--accent-glow);
+  }
+  .theme-crew .title { color: #4FC3F7; text-shadow: 0 0 30px rgba(79, 195, 247, 0.5); }
+  .theme-crew .subtitle { color: #66BB6A; }
+  .theme-crew .winner-icon { color: #4FC3F7; }
 
   /* Saboteur wins - red */
   .theme-saboteur {
-    background: rgba(40, 0, 0, 0.95);
-    border: 2px solid rgba(255, 0, 0, 0.5);
-    box-shadow: 0 0 40px rgba(200, 0, 0, 0.3);
+    --accent: #EF5350;
+    --accent-glow: rgba(239, 83, 80, 0.3);
+    --subtitle-color: #FFD54F;
+    background: rgba(25, 8, 8, 0.95);
+    border: 1px solid rgba(239, 83, 80, 0.25);
+    box-shadow: 0 8px 48px rgba(0, 0, 0, 0.6), 0 0 40px var(--accent-glow);
   }
-  .theme-saboteur .title { color: #FF4444; }
-  .theme-saboteur .subtitle { color: #FFAA00; }
+  .theme-saboteur .title { color: #EF5350; text-shadow: 0 0 30px rgba(239, 83, 80, 0.5); }
+  .theme-saboteur .subtitle { color: #FFD54F; }
+  .theme-saboteur .winner-icon { color: #EF5350; }
 
   /* Meltdown variant - orange/fire */
   .theme-meltdown {
-    background: rgba(40, 20, 0, 0.95);
-    border: 2px solid rgba(255, 150, 0, 0.6);
-    box-shadow: 0 0 40px rgba(255, 100, 0, 0.3);
+    --accent: #FF7043;
+    --accent-glow: rgba(255, 112, 67, 0.3);
+    --subtitle-color: #FFD54F;
+    background: rgba(25, 12, 5, 0.95);
+    border: 1px solid rgba(255, 112, 67, 0.3);
+    box-shadow: 0 8px 48px rgba(0, 0, 0, 0.6), 0 0 40px var(--accent-glow);
   }
-  .theme-meltdown .title { color: #FF6600; }
-  .theme-meltdown .subtitle { color: #FFAA00; }
+  .theme-meltdown .title { color: #FF7043; text-shadow: 0 0 30px rgba(255, 112, 67, 0.5); }
+  .theme-meltdown .subtitle { color: #FFD54F; }
+  .theme-meltdown .winner-icon { color: #FF7043; }
 
-  /* Time expired - dark */
+  /* Time expired - muted */
   .theme-time {
-    background: rgba(20, 20, 30, 0.95);
-    border: 2px solid rgba(100, 100, 150, 0.4);
-    box-shadow: 0 0 40px rgba(50, 50, 100, 0.3);
+    --accent: #90A4AE;
+    --accent-glow: rgba(144, 164, 174, 0.2);
+    --subtitle-color: rgba(255, 255, 255, 0.5);
+    background: rgba(15, 15, 22, 0.95);
+    border: 1px solid rgba(144, 164, 174, 0.2);
+    box-shadow: 0 8px 48px rgba(0, 0, 0, 0.6), 0 0 40px var(--accent-glow);
   }
-  .theme-time .title { color: #8888CC; }
-  .theme-time .subtitle { color: #888; }
+  .theme-time .title { color: #90A4AE; text-shadow: 0 0 30px rgba(144, 164, 174, 0.3); }
+  .theme-time .subtitle { color: rgba(255, 255, 255, 0.4); }
+  .theme-time .winner-icon { color: #90A4AE; }
+
+  .winner-icon {
+    font-size: 48px;
+    margin-bottom: 8px;
+    animation: iconPulse 2s ease-in-out infinite;
+  }
+
+  @keyframes iconPulse {
+    0%, 100% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.1); opacity: 1; }
+  }
 
   .title {
-    font-size: 36px;
-    font-weight: bold;
-    margin-bottom: 8px;
-    letter-spacing: 3px;
-    animation: fadeIn 1s;
+    font-size: 40px;
+    font-weight: 800;
+    margin-bottom: 6px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    animation: titleIn 1s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+  }
+
+  @keyframes titleIn {
+    0% { opacity: 0; transform: translateY(10px) scale(0.95); letter-spacing: 12px; }
+    100% { opacity: 1; transform: translateY(0) scale(1); letter-spacing: 4px; }
   }
 
   .subtitle {
-    font-size: 16px;
-    margin-bottom: 24px;
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 28px;
     letter-spacing: 1px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 0.8s forwards;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   .stats {
-    margin: 20px 0;
+    margin: 0 auto 28px;
     text-align: left;
     display: inline-block;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 1.2s forwards;
   }
   .stat-row {
-    padding: 4px 0;
+    padding: 6px 0;
     font-size: 14px;
-    color: #aaa;
+    color: rgba(255, 255, 255, 0.5);
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
-  .stat-label { color: #888; }
-  .stat-value { color: #ddd; font-weight: bold; }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label {
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 600;
+  }
+  .stat-value {
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
 
   .lobby-btn {
-    margin-top: 24px;
-    padding: 12px 36px;
-    background: rgba(0, 100, 200, 0.6);
-    border: 1px solid rgba(0, 150, 255, 0.5);
-    border-radius: 8px;
-    color: #fff;
-    font-family: 'Courier New', monospace;
-    font-size: 16px;
-    font-weight: bold;
+    margin-top: 8px;
+    padding: 14px 40px;
+    background: rgba(79, 195, 247, 0.15);
+    border: 1px solid rgba(79, 195, 247, 0.3);
+    border-radius: 14px;
+    color: #4FC3F7;
+    font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    font-weight: 700;
     cursor: pointer;
     letter-spacing: 2px;
-    transition: all 0.3s;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 1.6s forwards;
   }
-  .lobby-btn:hover { background: rgba(0, 130, 255, 0.8); transform: scale(1.05); }
+  .lobby-btn:hover {
+    background: rgba(79, 195, 247, 0.25);
+    border-color: rgba(79, 195, 247, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(79, 195, 247, 0.2);
+  }
 
-  @keyframes fadeIn {
-    0% { opacity: 0; transform: scale(0.8); }
-    100% { opacity: 1; transform: scale(1); }
+  .divider {
+    width: 60px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent, #4FC3F7), transparent);
+    margin: 0 auto 20px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 1s forwards;
   }
 </style>
 </head>
@@ -113,11 +203,13 @@
 
 <div class="overlay">
   <div class="game-over-panel" id="panel">
+    <div class="winner-icon" id="icon">&#9733;</div>
     <div class="title" id="title">GAME OVER</div>
     <div class="subtitle" id="subtitle"></div>
+    <div class="divider"></div>
     <div class="stats" id="stats"></div>
     <div>
-      <button class="lobby-btn" onclick="returnToLobby()">RETURN TO LOBBY</button>
+      <button class="lobby-btn" onclick="returnToLobby()">Return to Lobby</button>
     </div>
   </div>
 </div>
@@ -125,6 +217,7 @@
 <script>
 (function() {
   var panel = document.getElementById('panel');
+  var iconEl = document.getElementById('icon');
   var titleEl = document.getElementById('title');
   var subtitleEl = document.getElementById('subtitle');
   var statsEl = document.getElementById('stats');
@@ -134,27 +227,32 @@
     'crew_tasks': {
       theme: 'theme-crew',
       title: 'CREW WINS!',
-      subtitle: 'All tasks completed!'
+      subtitle: 'All tasks completed!',
+      icon: '&#9733;'
     },
     'crew_eject': {
       theme: 'theme-crew',
       title: 'CREW WINS!',
-      subtitle: 'All saboteurs ejected!'
+      subtitle: 'All saboteurs ejected!',
+      icon: '&#9733;'
     },
     'saboteur_elimination': {
       theme: 'theme-saboteur',
       title: 'SABOTEURS WIN!',
-      subtitle: 'The crew has fallen.'
+      subtitle: 'The crew has fallen.',
+      icon: '&#9760;'
     },
     'saboteur_meltdown': {
       theme: 'theme-meltdown',
-      title: 'SABOTEURS WIN!',
-      subtitle: 'Reactor meltdown!'
+      title: 'MELTDOWN!',
+      subtitle: 'Reactor critical — saboteurs win!',
+      icon: '&#9762;'
     },
     'saboteur_time': {
       theme: 'theme-time',
-      title: 'SABOTEURS WIN!',
-      subtitle: 'Time has expired.'
+      title: 'TIME EXPIRED',
+      subtitle: 'The saboteurs outlasted the crew.',
+      icon: '&#9201;'
     }
   };
 
@@ -165,6 +263,7 @@
     panel.classList.add(config.theme);
     titleEl.textContent = config.title;
     subtitleEl.textContent = config.subtitle;
+    iconEl.innerHTML = config.icon;
     configured = true;
   }
 
@@ -218,10 +317,10 @@
       var timeStr = timeMin + ':' + (timeSec < 10 ? '0' : '') + timeSec;
 
       statsEl.innerHTML =
-        '<div class="stat-row"><span class="stat-label">Time elapsed: </span><span class="stat-value">' + timeStr + '</span></div>' +
-        '<div class="stat-row"><span class="stat-label">Tasks completed: </span><span class="stat-value">' + Math.round(completed) + '</span></div>' +
-        '<div class="stat-row"><span class="stat-label">Eliminations: </span><span class="stat-value">' + Math.round(elims) + '</span></div>' +
-        '<div class="stat-row"><span class="stat-label">Meetings called: </span><span class="stat-value">' + Math.round(meetings) + '</span></div>';
+        '<div class="stat-row"><span class="stat-label">Time elapsed</span><span class="stat-value">' + timeStr + '</span></div>' +
+        '<div class="stat-row"><span class="stat-label">Tasks completed</span><span class="stat-value">' + Math.round(completed) + '</span></div>' +
+        '<div class="stat-row"><span class="stat-label">Eliminations</span><span class="stat-value">' + Math.round(elims) + '</span></div>' +
+        '<div class="stat-row"><span class="stat-label">Meetings called</span><span class="stat-value">' + Math.round(meetings) + '</span></div>';
       return;
     }
   });
