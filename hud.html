@@ -131,6 +131,9 @@
   var lobbyCountdownEndMs = 0;
   var lobbyCountdownTimeout = null;
   var lobbyCountdownSent = false;
+  var meltdownEndMs = 0;
+  var meltdownTimeout = null;
+  var meltdownTriggered = false;
 
   // ── DOM ──
   var hudEl = document.getElementById('hud');
@@ -264,6 +267,43 @@
     syncLobbyCountdown();
   }
 
+  function clearMeltdownCountdown() {
+    meltdownEndMs = 0;
+    meltdownTriggered = false;
+    if (meltdownTimeout) {
+      clearTimeout(meltdownTimeout);
+      meltdownTimeout = null;
+    }
+  }
+
+  function syncMeltdownCountdown() {
+    if (meltdownTriggered || meltdownEndMs <= 0) {
+      return;
+    }
+    var remainingMs = meltdownEndMs - Date.now();
+    if (remainingMs <= 0) {
+      meltdownTriggered = true;
+      meltdownEndMs = 0;
+      if (meltdownTimeout) {
+        clearTimeout(meltdownTimeout);
+        meltdownTimeout = null;
+      }
+      sendTaskToUnity('SaboteursWin_Meltdown');
+      return;
+    }
+    if (meltdownTimeout) {
+      clearTimeout(meltdownTimeout);
+    }
+    meltdownTimeout = setTimeout(syncMeltdownCountdown, remainingMs);
+  }
+
+  function startMeltdownCountdown(seconds) {
+    meltdownTriggered = false;
+    meltdownEndMs = Date.now() + (seconds * 1000);
+    showNotification('REACTOR MELTDOWN! ' + seconds + ' SECONDS!', 5000);
+    syncMeltdownCountdown();
+  }
+
   // ── Phase Management ──
   function setPhase(phase) {
     gamePhase = phase;
@@ -310,6 +350,7 @@
     // game_start_{tasksRequired}_{aliveCount}
     if (msgStr.startsWith('game_start_')) {
       clearLobbyCountdown();
+      clearMeltdownCountdown();
       var parts = msgStr.split('_');
       tasksRequired = parseFloat(parts[2]) || 20;
       aliveCount = parseFloat(parts[3]) || 8;
@@ -365,6 +406,7 @@
     // game_over_*
     if (msgStr.startsWith('game_over_')) {
       clearLobbyCountdown();
+      clearMeltdownCountdown();
       stopTimer();
       setPhase('game_over');
       var reason = msgStr.replace('game_over_', '');
@@ -379,6 +421,7 @@
     // game_reset
     if (msgStr === 'game_reset') {
       clearLobbyCountdown();
+      clearMeltdownCountdown();
       stopTimer();
       resetTimer(480);
       meetingPaused = false;
@@ -436,10 +479,11 @@
       return;
     }
     if (msgStr === 'meltdown_start') {
-      showNotification('REACTOR MELTDOWN! 30 SECONDS!', 5000);
+      startMeltdownCountdown(30);
       return;
     }
     if (msgStr === 'meltdown_stopped') {
+      clearMeltdownCountdown();
       showNotification('Reactor stabilized', 3000);
       return;
     }
@@ -460,6 +504,7 @@
   document.addEventListener('visibilitychange', function() {
     if (!document.hidden) {
       syncLobbyCountdown();
+      syncMeltdownCountdown();
       syncTimerFromClock();
       if (!meetingPaused && timerEndMs > 0 && !timerExpired) {
         ensureTimerLoop();
@@ -469,6 +514,7 @@
 
   window.addEventListener('focus', function() {
     syncLobbyCountdown();
+    syncMeltdownCountdown();
     syncTimerFromClock();
     if (!meetingPaused && timerEndMs > 0 && !timerExpired) {
       ensureTimerLoop();

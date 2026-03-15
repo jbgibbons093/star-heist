@@ -228,6 +228,7 @@
   var voteCounts = new Array(MAX_SLOTS + 1).fill(0);
   var rosterBySlot = {};
   var tallyDispatched = false;
+  var tallyRequested = false;
   var meetingResolved = false;
 
   function escapeHtml(str) {
@@ -334,7 +335,12 @@
     timerEl.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
     timerEl.classList.toggle('warning', remainingSeconds <= 10);
     if (remainingSeconds <= 0 && !voted && !meetingResolved) {
+      stopTimer();
       castVote(0);
+      requestTally(150);
+    } else if (remainingSeconds <= 0 && !meetingResolved) {
+      stopTimer();
+      requestTally(0);
     }
   }
 
@@ -424,6 +430,7 @@
     myVote = -1;
     meetingResolved = false;
     tallyDispatched = false;
+    tallyRequested = false;
     voteCounts = new Array(MAX_SLOTS + 1).fill(0);
     resultOverlay.classList.remove('visible');
     resetRoster();
@@ -455,6 +462,18 @@
       statusEl.innerHTML = '<span class="my-vote">You voted for ' + escapeHtml(formatName(slot)) + '</span>';
     }
   };
+
+  function requestTally(delayMs) {
+    if (tallyRequested || tallyDispatched || meetingResolved) return;
+    tallyRequested = true;
+    window.setTimeout(function() {
+      if (tallyDispatched || meetingResolved) return;
+      PortalsSdk.sendMessageToUnity(JSON.stringify({
+        TaskName: 'TallyVotes',
+        TaskTargetState: 'SetNotActiveToActive'
+      }));
+    }, delayMs || 0);
+  }
 
   function showResult(ejected, slot, role) {
     stopTimer();
@@ -536,6 +555,7 @@
     }
 
     if (msg.startsWith('tally_')) {
+      tallyRequested = false;
       var tallyParts = msg.split('_');
       for (var i = 1; i <= MAX_SLOTS; i++) {
         voteCounts[i] = parseFloat(tallyParts[i]) || 0;
